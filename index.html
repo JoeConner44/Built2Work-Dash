@@ -1011,9 +1011,12 @@ window.addEventListener('DOMContentLoaded', async ()=>{
   document.getElementById('loginEmail').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
   const {data:{session}}=await sb.auth.getSession();
   if(session){
-    // Check if logged-in user is a customer
-    const {data:cos}=await sb.from('companies').select('id').eq('email',session.user.email).limit(1);
-    if(cos&&cos.length){window.location.href='customer.html';return;}
+    // A cached session here should belong to staff. If it's actually a
+    // customer account (e.g. left over from someone else on a shared
+    // computer, or a previous test login), don't silently follow it into
+    // the customer portal — sign it out and show a fresh login screen so
+    // whoever is here now logs in as themselves.
+    if(await isCustomerEmail(session.user.email)){await sb.auth.signOut();return;}
     showApp(session.user.email);await loadData();
   }
 });
@@ -1028,9 +1031,10 @@ async function doLogin(){
   btn.disabled=true;btn.textContent='Signing in\u2026';
   const {data,error}=await sb.auth.signInWithPassword({email,password});
   if(error){errEl.textContent='Invalid email or password. Please try again.';btn.disabled=false;btn.textContent='Sign In \u2192';return;}
-  // Check if this user is a customer — if so, redirect to customer portal
-  const {data:cos}=await sb.from('companies').select('id').eq('email',email).limit(1);
-  if(cos&&cos.length){window.location.href='customer.html';return;}
+  // This is an explicit sign-in the person just performed, so if the
+  // account they typed turns out to be a customer account, honor that —
+  // take them to the portal they actually meant to reach.
+  if(await isCustomerEmail(email)){window.location.href='customer.html';return;}
   showApp(data.user.email);
   await loadData();
 }
