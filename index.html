@@ -701,6 +701,7 @@ footer{border-top:1px solid var(--border);}
 <div id="pipeTabBar" style="display:none;background:#111;border-bottom:1px solid var(--border);padding:0 18px;flex-shrink:0;display:none;">
   <button class="pipe-tab active" id="tabAnalytics" onclick="switchPipeTab('analytics')" style="font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:11px 18px;background:transparent;border:none;border-bottom:2px solid #ce0e2d;color:#ce0e2d;cursor:pointer;margin-bottom:-1px;">&#9632; Analytics</button>
   <button class="pipe-tab" id="tabPipeline" onclick="switchPipeTab('pipeline')" style="font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:11px 18px;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;margin-bottom:-1px;">&#9632; Pipeline <span id="pipeBadge" class="pipe-badge" style="display:none">0</span></button>
+  <button class="pipe-tab" id="tabLeads" onclick="switchPipeTab('leads')" style="font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:11px 18px;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;margin-bottom:-1px;">&#9632; Internet Leads</button>
 </div>
 <div id="appLayout" style="display:none;">
   <!-- SIDEBAR -->
@@ -972,6 +973,8 @@ async function runDiag(){
 const AUTO_REFRESH_MS = 300000; // 5 minutes
 
 let rawWeb=[], rawExc=[], rawWin=[];
+let rawLeads=[];
+let leadsSort={col:'name',dir:1};
 let charts={}, refreshTimer=null, showAllParticipants=false, tblSearch='';
 // Geo / radius filter state
 let geoFilter = { active:false, lat:null, lng:null, radius:25, address:'' };
@@ -2201,26 +2204,145 @@ async function loadCRMData(){
 function switchPipeTab(tab){
   const analytics = document.getElementById('appLayout');
   const pipeline  = document.getElementById('pipelinePanel');
+  const leads     = document.getElementById('leadsPanel');
   const tA = document.getElementById('tabAnalytics');
   const tP = document.getElementById('tabPipeline');
+  const tL = document.getElementById('tabLeads');
+  analytics.style.display = tab==='analytics' ? 'flex' : 'none';
+  pipeline.style.display  = tab==='pipeline'  ? 'flex' : 'none';
+  leads.style.display     = tab==='leads'     ? 'flex' : 'none';
+  [[tA,'analytics'],[tP,'pipeline'],[tL,'leads']].forEach(([el,name])=>{
+    el.style.color = tab===name ? '#ce0e2d' : 'var(--muted)';
+    el.style.borderBottomColor = tab===name ? '#ce0e2d' : 'transparent';
+  });
   if(tab==='pipeline'){
-    analytics.style.display='none';
-    pipeline.style.display='flex';
-    tA.style.color='var(--muted)';tA.style.borderBottomColor='transparent';
-    tP.style.color='#ce0e2d';tP.style.borderBottomColor='#ce0e2d';
     loadCRMData().then(()=>{ renderPipeline(); markEventsSeen(); });
-  } else {
-    analytics.style.display='flex';
-    pipeline.style.display='none';
-    tA.style.color='#ce0e2d';tA.style.borderBottomColor='#ce0e2d';
-    tP.style.color='var(--muted)';tP.style.borderBottomColor='transparent';
+  } else if(tab==='leads'){
+    loadLeadsData().then(renderLeads);
   }
+}
+
+// ── INTERNET LEADS ────────────────────────────────────────────────────────────
+async function loadLeadsData(){
+  try{
+    // Companies/assignments are needed to show each lead's assignment status;
+    // reload alongside leads (same refetch-on-every-visit pattern as Pipeline).
+    const [leads] = await Promise.all([fetchAll('Internet Leads'), loadCRMData()]);
+    rawLeads = leads;
+  } catch(e){ console.error('Internet Leads load error:',e); alert('Error loading Internet Leads: '+e.message); }
+}
+
+function leadsSortBy(col){
+  if(leadsSort.col===col) leadsSort.dir*=-1;
+  else { leadsSort.col=col; leadsSort.dir=1; }
+  renderLeads();
+}
+
+function renderLeads(){
+  const q       = (document.getElementById('leadsSearch')?.value||'').toLowerCase().trim();
+  const state   = document.getElementById('leadsStateFilter')?.value || '';
+  const status  = document.getElementById('leadsStatusFilter')?.value || '';
+  const optIn   = document.getElementById('leadsOptInFilter')?.value || '';
+
+  // Populate the state/status filter option lists once data is in (idempotent).
+  const stateSel = document.getElementById('leadsStateFilter');
+  if(stateSel && stateSel.options.length<=1){
+    const states=[...new Set(rawLeads.map(r=>(r['State']||'').trim()).filter(Boolean))].sort();
+    states.forEach(s=>{const o=document.createElement('option');o.value=s;o.textContent=s;stateSel.appendChild(o);});
+  }
+  const statusSel = document.getElementById('leadsStatusFilter');
+  if(statusSel && statusSel.options.length<=1){
+    const statuses=[...new Set(rawLeads.map(r=>(r['Current Job Status']||'').trim()).filter(Boolean))].sort();
+    statuses.forEach(s=>{const o=document.createElement('option');o.value=s;o.textContent=s;statusSel.appendChild(o);});
+  }
+
+  let rows = rawLeads.map(r=>{
+    const phone = normalizePhone(r['Phone']||'');
+    const a = assignments.find(x=>x.phone===phone);
+    const company = a ? companies.find(c=>c.id===a.company_id) : null;
+    return {
+      raw:r, phone,
+      name:(r['Name']||'').trim()||'—',
+      email:r['Email']||'',
+      city:r['City']||'', state:r['State']||'',
+      jobStatus:r['Current Job Status']||'',
+      industry:r['What industry do you work in/ would like to work in?']||'',
+      travel:r['Are you willing to travel for work?']||'',
+      optIn:r['Opt In']||'',
+      assignedCompany: company ? company.name : (a ? '● Unassigned Pipeline' : '')
+    };
+  });
+
+  if(state)  rows=rows.filter(r=>r.state===state);
+  if(status) rows=rows.filter(r=>r.jobStatus===status);
+  if(optIn)  rows=rows.filter(r=>r.optIn===optIn);
+  if(q) rows=rows.filter(r=>
+    r.name.toLowerCase().includes(q)||
+    r.phone.includes(q)||
+    r.email.toLowerCase().includes(q)||
+    r.city.toLowerCase().includes(q)
+  );
+
+  rows.sort((a,b)=>{
+    const av=a[leadsSort.col]||'', bv=b[leadsSort.col]||'';
+    if(av<bv) return -1*leadsSort.dir;
+    if(av>bv) return  1*leadsSort.dir;
+    return 0;
+  });
+
+  document.getElementById('leadsCount').textContent = rows.length.toLocaleString()+' leads';
+  const tbody = document.getElementById('leadsTbody');
+  if(!rows.length){
+    tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--muted);font-style:italic;">No leads found.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(r=>{
+    const detailTip = [
+      r.raw['Work History']?'Work History: '+r.raw['Work History']:'',
+      r.raw['Skills & Experience']?'Skills: '+r.raw['Skills & Experience']:'',
+      r.raw['Licenses/ Certifications']?'Licenses: '+r.raw['Licenses/ Certifications']:'',
+      r.raw['Education']?'Education: '+r.raw['Education']:'',
+      r.raw['Where did you hear about us?']?'Source: '+r.raw['Where did you hear about us?']:''
+    ].filter(Boolean).join(' | ');
+    return `<tr data-phone="${esc(r.phone)}">
+      <td><span class="pipe-name" style="cursor:pointer" title="Double-click to assign to a company">${esc(r.name)}</span>${detailTip?` <span data-tip="${esc(detailTip)}" onmouseenter="showTip(event,this)" onmouseleave="hideTip()" style="cursor:help;color:var(--muted)">&#9432;</span>`:''}<br><span style="font-size:11px;color:var(--muted)">${esc(r.raw['Phone']||'')}</span></td>
+      <td>${esc(r.email)||'—'}</td>
+      <td>${esc(r.city)}${r.city&&r.state?', ':''}${esc(r.state)}</td>
+      <td>${esc(r.jobStatus)||'—'}</td>
+      <td>${esc(r.industry)||'—'}</td>
+      <td>${esc(r.travel)||'—'}</td>
+      <td>${esc(r.optIn)||'—'}</td>
+      <td><span style="${r.assignedCompany?'':'color:var(--amber)'}">${esc(r.assignedCompany)||'Unassigned'}</span></td>
+    </tr>`;
+  }).join('');
+
+  document.querySelectorAll('#leadsTbody tr').forEach(tr=>{
+    const phone = tr.dataset.phone;
+    const r = rows.find(x=>x.phone===phone);
+    if(!r) return;
+    tr.ondblclick = ()=>onCandidateDblClick(phone, r.name, {
+      current_job: r.jobStatus, work_history: r.raw['Work History']||''
+    });
+  });
+}
+
+function exportLeadsExcel(){
+  if(typeof XLSX==='undefined'){alert('Excel library loading.');return;}
+  const rows=[...document.querySelectorAll('#leadsTbody tr')].map(tr=>
+    [...tr.querySelectorAll('td')].map(td=>td.innerText.replace(/\n/g,' ').trim())
+  );
+  const head=['Name / Phone','Email','City, State','Job Status','Industry Interest','Willing to Travel','Opt In','Assigned'];
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.aoa_to_sheet([head,...rows]);
+  ws['!cols']=[{wch:24},{wch:24},{wch:20},{wch:20},{wch:22},{wch:14},{wch:10},{wch:20}];
+  XLSX.utils.book_append_sheet(wb,ws,'Internet Leads');
+  XLSX.writeFile(wb,'BTW-InternetLeads_'+new Date().toISOString().slice(0,10)+'.xlsx');
 }
 
 // Patch showApp to show tab bar
 
 // ── DOUBLE-CLICK ON CANDIDATE NAME ───────────────────────────────────────────
-function onCandidateDblClick(phone, name){
+function onCandidateDblClick(phone, name, prefill){
   assignPhone = phone;
   document.getElementById('assignCandidateName').textContent = name;
   // Populate company dropdown
@@ -2247,6 +2369,13 @@ function onCandidateDblClick(phone, name){
     ['assignHopefulJob','assignPayScale','assignCurrentJob','assignWorkHistory','assignNotes'].forEach(id=>{
       document.getElementById(id).value='';
     });
+    // Give a new assignment a head start from source data (e.g. an Internet
+    // Lead's own self-reported job/work-history fields) when there's no
+    // existing candidate_assignments row to pull from instead.
+    if(prefill){
+      if(prefill.current_job)  document.getElementById('assignCurrentJob').value  = prefill.current_job;
+      if(prefill.work_history) document.getElementById('assignWorkHistory').value = prefill.work_history;
+    }
     const fileEx2 = document.getElementById('assignFileExisting');
     if(fileEx2) fileEx2.innerHTML='';
     const fileNm = document.getElementById('assignFileName');
@@ -3068,6 +3197,40 @@ async function bulkAddToUnassigned(){
         <th></th>
       </tr></thead>
       <tbody id="pipeTbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div id="leadsPanel" style="display:none;flex:1;overflow-y:auto;flex-direction:column;">
+  <div class="pipe-toolbar">
+    <select class="pipe-filter-select" id="leadsStateFilter" onchange="renderLeads()">
+      <option value="">All States</option>
+    </select>
+    <select class="pipe-filter-select" id="leadsStatusFilter" onchange="renderLeads()">
+      <option value="">All Job Statuses</option>
+    </select>
+    <select class="pipe-filter-select" id="leadsOptInFilter" onchange="renderLeads()">
+      <option value="">Opt In: All</option>
+      <option value="Yes">Opt In: Yes</option>
+      <option value="No">Opt In: No</option>
+    </select>
+    <input class="pipe-search" id="leadsSearch" placeholder="Search name / phone / email / city…" oninput="renderLeads()">
+    <span class="pipe-count" id="leadsCount"></span>
+    <button class="pipe-export-btn" onclick="exportLeadsExcel()">&#8681; Excel</button>
+  </div>
+  <div class="pipe-table-wrap">
+    <table class="pipe-tbl">
+      <thead><tr>
+        <th onclick="leadsSortBy('name')">Name &#8597;</th>
+        <th onclick="leadsSortBy('email')">Email &#8597;</th>
+        <th onclick="leadsSortBy('city')">City, State &#8597;</th>
+        <th onclick="leadsSortBy('jobStatus')">Job Status &#8597;</th>
+        <th onclick="leadsSortBy('industry')">Industry Interest &#8597;</th>
+        <th>Willing to Travel</th>
+        <th>Opt In</th>
+        <th onclick="leadsSortBy('assignedCompany')">Assigned &#8597;</th>
+      </tr></thead>
+      <tbody id="leadsTbody"></tbody>
     </table>
   </div>
 </div>
