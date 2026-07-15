@@ -285,11 +285,14 @@ async function doLogin(){
 async function showApp(){
   document.getElementById('loadingScreen').style.display='flex';
   const {data:{user}}=await sb.auth.getUser();
-  const {data:cos}=await sb.from('companies').select('*').eq('email',user.email).limit(1);
+  const {data:cos}=await sb.from('companies').select('*').ilike('email',user.email).limit(1);
   if(!cos||!cos.length){
+    // Not a customer account — don't leave them signed in on the wrong
+    // portal, sign out so the next attempt starts from a clean login.
+    await sb.auth.signOut();
     document.getElementById('loadingScreen').style.display='none';
     document.getElementById('loginScreen').style.display='flex';
-    document.getElementById('loginErr').textContent='No company found. Contact Built to Work.';
+    document.getElementById('loginErr').textContent='No company found for this account. Contact Built to Work.';
     return;
   }
   myCompany=cos[0];

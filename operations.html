@@ -192,6 +192,8 @@ window.addEventListener('DOMContentLoaded',async()=>{
   setLoadingText('Checking session…');
   const {data:{session}}=await sb.auth.getSession();
   if(!session){window.location.href='index.html';return;}
+  // Staff-only page: a cached customer session shouldn't land here either.
+  if(await isCustomerEmail(session.user.email)){await sb.auth.signOut();window.location.href='index.html';return;}
   showApp(session.user.email);
   await loadData();
 });

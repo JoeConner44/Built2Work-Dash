@@ -24,6 +24,20 @@ function normalizePhone(p){
   return d.slice(-9);
 }
 
+/* Single source of truth for "is this email a customer account?", used to
+ * route logins between the staff dashboards (index.html/operations.html) and
+ * the customer portal (customer.html). Uses ilike (case/whitespace-insensitive)
+ * so a stray casing difference between Supabase Auth and the companies table
+ * can't silently misroute someone. Errors are logged and treated as "not a
+ * customer" (fail toward the staff-only side) rather than throwing. */
+async function isCustomerEmail(email){
+  const clean = String(email||'').trim();
+  if(!clean) return false;
+  const {data,error} = await sb.from('companies').select('id').ilike('email',clean).limit(1);
+  if(error){ console.error('companies lookup failed', error); return false; }
+  return !!(data && data.length);
+}
+
 /* HTML-escape a value for safe insertion as element text OR inside a
  * double-quoted attribute. Use this for EVERY DB/API/user-supplied value that
  * goes into innerHTML. */
