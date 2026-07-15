@@ -1,0 +1,10 @@
+# Local / editor / OS noise — keep credentials and build junk out of git
+.env
+.env.*
+*.local
+.DS_Store
+Thumbs.db
+node_modules/
+*.log
+.vscode/
+.idea/
