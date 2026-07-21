@@ -2858,8 +2858,18 @@ function onGeoInput(val){
     const params=new URLSearchParams({q:val,country:'US',types:'address,street,place,postcode,locality,neighborhood',limit:'5',session_token:geoSession(),access_token:MAPBOX_TOKEN});
     try{
       const url=`https://api.mapbox.com/search/searchbox/v1/suggest?${params}`;
-      const data=await fetch(url).then(r=>r.json());
-      if(!floatSugg||!data.suggestions||!data.suggestions.length){if(floatSugg)floatSugg.style.display='none';return;}
+      const r=await fetch(url);
+      if(!r.ok){
+        let msg='';try{msg=(await r.json())?.message||'';}catch(_){}
+        document.getElementById('geoStatus').textContent='⚠ Address lookup failed — HTTP '+r.status+(msg?': '+msg:'');
+        if(floatSugg)floatSugg.style.display='none';return;
+      }
+      const data=await r.json();
+      if(!data.suggestions||!data.suggestions.length){
+        document.getElementById('geoStatus').textContent='No matches for “'+val+'”';
+        if(floatSugg)floatSugg.style.display='none';return;
+      }
+      if(!floatSugg)return;
       const inp=document.getElementById('geoAddressInput');
       const rect=inp.getBoundingClientRect();
       floatSugg.style.left=rect.left+'px';
@@ -2870,7 +2880,8 @@ function onGeoInput(val){
         return `<div class="geo-suggestion" onclick="selectGeoSuggestion('${jsAttr(s.mapbox_id)}','${jsAttr(name)}')">${esc(name)}</div>`;
       }).join('');
       floatSugg.style.display='block';
-    }catch(e){console.warn('Geocode autocomplete error',e);}
+      document.getElementById('geoStatus').textContent='';
+    }catch(e){console.warn('Geocode autocomplete error',e);document.getElementById('geoStatus').textContent='⚠ Address lookup error: '+e.message;}
   },300);
 }
 

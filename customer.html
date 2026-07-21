@@ -556,14 +556,24 @@ function cOnGeoInput(val){
     try{
       const params=new URLSearchParams({q:val,country:'US',types:'address,street,place,postcode,locality,neighborhood',limit:'5',session_token:cGeoSessionToken(),access_token:MAPBOX_TOKEN});
       const url=`https://api.mapbox.com/search/searchbox/v1/suggest?${params}`;
-      const data=await fetch(url).then(r=>r.json());
-      if(!data.suggestions||!data.suggestions.length){sug.style.display='none';return;}
+      const r=await fetch(url);
+      if(!r.ok){
+        let msg='';try{msg=(await r.json())?.message||'';}catch(_){}
+        document.getElementById('cGeoStatus').textContent='⚠ Address lookup failed — HTTP '+r.status+(msg?': '+msg:'');
+        sug.style.display='none';return;
+      }
+      const data=await r.json();
+      if(!data.suggestions||!data.suggestions.length){
+        document.getElementById('cGeoStatus').textContent='No matches for “'+val+'”';
+        sug.style.display='none';return;
+      }
       sug.innerHTML=data.suggestions.map(s=>{
         const name=s.full_address||(s.name?s.name+(s.place_formatted?', '+s.place_formatted:''):'')||s.place_formatted||'';
         return `<div onclick="cSelectGeo('${jsAttr(s.mapbox_id)}','${jsAttr(name)}')">${esc(name)}</div>`;
       }).join('');
       sug.style.display='block';
-    }catch(e){console.warn(e);}
+      document.getElementById('cGeoStatus').textContent='';
+    }catch(e){console.warn(e);document.getElementById('cGeoStatus').textContent='⚠ Address lookup error: '+e.message;}
   },300);
 }
 
