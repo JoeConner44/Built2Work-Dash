@@ -340,9 +340,9 @@ footer{border-top:1px solid var(--border);}
 .diag-box.visible{display:block;}
 .diag-row{display:flex;align-items:flex-start;gap:8px;}
 .diag-icon{flex-shrink:0;font-size:13px;}
-.diag-ok{color:#3fb950;}.diag-fail{color:#ce0e2d;}.diag-warn{color:#f0a500;}.diag-wait{color:#9a9a9a;}
+.diag-ok{color:#1a7f37;}.diag-fail{color:#ce0e2d;}.diag-warn{color:#9a6700;}.diag-wait{color:#57606a;}
 .diag-btn{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:7px 16px;border:1.5px solid #d0d7de;background:transparent;color:#57606a;border-radius:4px;cursor:pointer;transition:all .2s;width:100%;}
-.diag-btn:hover{border-color:#58a6ff;color:#58a6ff;}
+.diag-btn:hover{border-color:#0969da;color:#0969da;}
 /* ── CERT CARD TALL ── */
 #cCerts.tall{grid-row:span 2;}
 /* ── TRIVIA SCORE SECTION ── */
@@ -573,11 +573,11 @@ footer{border-top:1px solid var(--border);}
 .pipe-company{font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--blue);font-weight:700;}
 .status-badge{display:inline-block;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:.5px;padding:2px 8px;border-radius:3px;text-transform:uppercase;white-space:nowrap;}
 .status-not-contacted{background:rgba(139,148,158,.15);color:#8b949e;}
-.status-contacted{background:rgba(88,166,255,.15);color:#58a6ff;}
-.status-interviewed{background:rgba(240,165,0,.15);color:#f0a500;}
-.status-offered{background:rgba(188,140,255,.15);color:#bc8cff;}
-.status-hired{background:rgba(63,185,80,.2);color:#3fb950;}
-.status-rejected{background:rgba(248,81,73,.15);color:#f85149;}
+.status-contacted{background:rgba(9,105,218,.12);color:#0969da;}
+.status-interviewed{background:rgba(240,165,0,.18);color:#9a6700;}
+.status-offered{background:rgba(130,80,223,.12);color:#8250df;}
+.status-hired{background:rgba(26,127,55,.15);color:#1a7f37;}
+.status-rejected{background:rgba(207,34,46,.12);color:#cf222e;}
 .pipe-notes-cell{max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted);font-size:11px;}
 .pipe-time{font-size:11px;color:var(--muted);white-space:nowrap;}
 
@@ -617,7 +617,7 @@ footer{border-top:1px solid var(--border);}
 .feed-row.unread{background:rgba(206,14,45,.08);border-left:3px solid #ce0e2d;}
 .feed-reason{font-size:12px;color:var(--muted);font-style:italic;margin-top:2px;}
 /* Rejection count badge on pipeline rows */
-.rej-badge{display:inline-block;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;background:rgba(248,81,73,.15);color:#f85149;border:1px solid rgba(248,81,73,.4);padding:1px 6px;border-radius:9px;margin-left:6px;cursor:default;vertical-align:middle;}
+.rej-badge{display:inline-block;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;background:rgba(207,34,46,.12);color:#cf222e;border:1px solid rgba(207,34,46,.4);padding:1px 6px;border-radius:9px;margin-left:6px;cursor:default;vertical-align:middle;}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2757,7 +2757,7 @@ function openPipeEdit(id){
     const rej = (rejInfoByPhone()[r.phone])||[];
     histEl.style.display = rej.length ? 'block' : 'none';
     histEl.innerHTML = rej.length
-      ? '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#f85149;margin-bottom:6px;">Rejection History ('+rej.length+')</div>'
+      ? '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#cf222e;margin-bottom:6px;">Rejection History ('+rej.length+')</div>'
         + rej.map(e=>`<div style="font-size:12px;font-family:'Barlow',sans-serif;color:var(--text);padding:5px 8px;background:rgba(248,81,73,.07);border-left:2px solid rgba(248,81,73,.5);border-radius:3px;margin-bottom:4px;line-height:1.4;"><b>${esc(e.company_name||'Unknown')}</b> <span style="color:var(--muted)">— ${timeAgo(e.changed_at)}</span><br>${esc(e.reason)||'<i style="color:var(--muted)">no reason given</i>'}</div>`).join('')
       : '';
   }
