@@ -8,19 +8,19 @@
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg: #0d1117;
-  --surface: #161b22;
-  --surface2: #1c2333;
-  --surface3: #21262d;
-  --border: #30363d;
+  --bg: #ffffff;
+  --surface: #f6f8fa;
+  --surface2: #eaeef2;
+  --surface3: #e1e6eb;
+  --border: #d0d7de;
   --accent: #f0a500;
   --accent2: #e85d04;
-  --text: #e6edf3;
-  --muted: #8b949e;
-  --green: #3fb950;
-  --blue: #58a6ff;
-  --red: #f85149;
-  --purple: #bc8cff;
+  --text: #0d1117;
+  --muted: #57606a;
+  --green: #1a7f37;
+  --blue: #0969da;
+  --red: #cf222e;
+  --purple: #8250df;
   --sidebar-w: 300px;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -84,7 +84,7 @@ body{background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;font
 
 /* ── HEADER ── */
 header{
-  background:linear-gradient(135deg,#0d1117 0%,#1a1000 50%,#0d1117 100%);
+  background:linear-gradient(135deg,#ffffff 0%,#fff8ea 50%,#ffffff 100%);
   border-bottom:2px solid var(--accent);
   padding:14px 24px;display:flex;align-items:center;justify-content:space-between;
   flex-shrink:0;box-shadow:0 4px 24px rgba(240,165,0,.12);
@@ -235,7 +235,7 @@ input[type=range]{flex:1;accent-color:var(--accent);cursor:pointer;}
   padding:7px 10px;text-align:left;border-bottom:1px solid var(--border);
   background:var(--bg);position:sticky;top:0;z-index:1;white-space:nowrap;
 }
-.ptbl td{padding:8px 10px;border-bottom:1px solid #21262d;vertical-align:middle;}
+.ptbl td{padding:8px 10px;border-bottom:1px solid #e1e6eb;vertical-align:middle;}
 .ptbl tr:hover td{background:var(--surface2);}
 .ptbl tr:last-child td{border-bottom:none;}
 
@@ -262,7 +262,7 @@ input[type=range]{flex:1;accent-color:var(--accent);cursor:pointer;}
 /* Trivia table */
 .ttbl{width:100%;border-collapse:collapse;}
 .ttbl th{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);padding:6px 10px;text-align:left;border-bottom:1px solid var(--border);}
-.ttbl td{padding:8px 10px;border-bottom:1px solid #21262d;}
+.ttbl td{padding:8px 10px;border-bottom:1px solid #e1e6eb;}
 .ttbl tr:hover td{background:var(--surface2);}
 .ttbl tr:last-child td{border-bottom:none;}
 .ttest{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;}
@@ -288,7 +288,7 @@ footer{text-align:center;padding:16px;color:var(--muted);font-size:11px;border-t
 :root{--bg:#0d0d0d;--surface:#161616;--surface2:#1e1e1e;--surface3:#252525;--border:#333333;--accent:#ce0e2d;--accent2:#8f1220;--text:#f0f0f0;--muted:#9a9a9a;--green:#3fb950;--blue:#58a6ff;--red:#ce0e2d;--sidebar-w:300px;}
 header{background:#111111!important;border-bottom:3px solid #ce0e2d!important;box-shadow:0 2px 20px rgba(0,0,0,.5)!important;}
 .h-hex{display:none!important;}
-.h-title h1{font-family:'Oswald',sans-serif!important;font-size:16px!important;font-weight:500!important;letter-spacing:2px!important;color:#e0e0e0!important;}
+.h-title h1{font-family:'Oswald',sans-serif!important;font-size:16px!important;font-weight:500!important;letter-spacing:2px!important;color:#0d1117!important;}
 .h-title p{font-size:10px!important;color:#666!important;}
 .kpi-card{border-top:3px solid #ce0e2d!important;border-radius:4px!important;}
 .kpi-value{font-family:'Oswald',sans-serif!important;font-size:32px!important;color:#FFFFFF!important;}
@@ -566,7 +566,7 @@ footer{border-top:1px solid var(--border);}
 .pipe-tbl{width:100%;border-collapse:collapse;}
 .pipe-tbl th{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);padding:7px 10px;text-align:left;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;cursor:pointer;white-space:nowrap;}
 .pipe-tbl th:hover{color:var(--text);}
-.pipe-tbl td{padding:8px 10px;border-bottom:1px solid #21262d;font-size:12px;vertical-align:middle;}
+.pipe-tbl td{padding:8px 10px;border-bottom:1px solid #e1e6eb;font-size:12px;vertical-align:middle;}
 .pipe-tbl tr:hover td{background:var(--surface2);}
 .pipe-tbl tr:last-child td{border-bottom:none;}
 .pipe-name{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;}
@@ -1394,21 +1394,21 @@ function renderGrid(webRows,excRows,winRows){
   const sb2={};['0-10','11-20','21-30','31-40','41-50','51-60','61-70','71-80','81-90','91-100'].forEach(b=>sb2[b]=0);
   excRows.forEach(r=>{const s=parseFloat(r['Total Score']);if(!isNaN(s)){const sg=excScoreSeg(s);if(sg)sb2[sg]++;}});
   const sdK=Object.keys(sb2).filter(k=>sb2[k]>0),sdV=sdK.map(k=>sb2[k]);
-  charts.exc=new Chart(document.getElementById('chartExc'),{type:'pie',data:{labels:sdK.map(k=>'Score '+k),datasets:[{data:sdV,backgroundColor:PIE_PALETTE.slice(0,sdV.length),borderColor:'#161b22',borderWidth:2}]},options:{...co,onClick:(e,els)=>{if(!els.length)return;toggleFilter('scoreSegs',sdK[els[0].index]);}}});
+  charts.exc=new Chart(document.getElementById('chartExc'),{type:'pie',data:{labels:sdK.map(k=>'Score '+k),datasets:[{data:sdV,backgroundColor:PIE_PALETTE.slice(0,sdV.length),borderColor:'#ffffff',borderWidth:2}]},options:{...co,onClick:(e,els)=>{if(!els.length)return;toggleFilter('scoreSegs',sdK[els[0].index]);}}});
   const em={};webRows.forEach(r=>{const e=(r['Job Status']||'').trim();if(e)em[e]=(em[e]||0)+1;});
   const empShort={'Currently employed in construction and/or a trade':'In Trades','Currently employed in another industry':'Other Industry','Retired':'Retired','Other':'Other','Student':'Student','Unemployed and looking for work':'Unemployed'};
   const emK=Object.keys(em),emV=emK.map(k=>em[k]);
-  charts.emp=new Chart(document.getElementById('chartEmp'),{type:'pie',data:{labels:emK.map(k=>empShort[k]||k),datasets:[{data:emV,backgroundColor:PIE_PALETTE.slice(0,emV.length),borderColor:'#161b22',borderWidth:2}]},options:{...co,onClick:(e,els)=>{if(!els.length)return;toggleFilter('employment',emK[els[0].index]);}}});
+  charts.emp=new Chart(document.getElementById('chartEmp'),{type:'pie',data:{labels:emK.map(k=>empShort[k]||k),datasets:[{data:emV,backgroundColor:PIE_PALETTE.slice(0,emV.length),borderColor:'#ffffff',borderWidth:2}]},options:{...co,onClick:(e,els)=>{if(!els.length)return;toggleFilter('employment',emK[els[0].index]);}}});
   const ji={};webRows.forEach(r=>{const v=(r['Interested in Construction Jobs']||'').trim()||'No Answer';ji[v]=(ji[v]||0)+1;});
   const jiC={'Yes':'#3fb950','Maybe':'#f0a500','No':'#f85149','No Answer':'#8b949e'};
   const jiK=Object.keys(ji),jiV=jiK.map(k=>ji[k]);
-  charts.ji=new Chart(document.getElementById('chartJI'),{type:'pie',data:{labels:jiK,datasets:[{data:jiV,backgroundColor:jiK.map(k=>jiC[k]||'#8b949e'),borderColor:'#161b22',borderWidth:2}]},options:{...co,onClick:(e,els)=>{if(!els.length)return;toggleFilter('jobInterest',jiK[els[0].index]);}}});
+  charts.ji=new Chart(document.getElementById('chartJI'),{type:'pie',data:{labels:jiK,datasets:[{data:jiV,backgroundColor:jiK.map(k=>jiC[k]||'#8b949e'),borderColor:'#ffffff',borderWidth:2}]},options:{...co,onClick:(e,els)=>{if(!els.length)return;toggleFilter('jobInterest',jiK[els[0].index]);}}});
   const ageBins=['18-20','21-25','26-30','31-35','36-40','41-45','46-50','51-55','56-60','61-65','66-70','71-75','76-80','80+'];
   const ac={};ageBins.forEach(b=>ac[b]=0);webRows.forEach(r=>{const a=getAge(r['DOB']),g=ageGroup(a);if(g&&ac[g]!==undefined)ac[g]++;});
   const ahK=ageBins.filter(b=>ac[b]>0),ahV=ahK.map(b=>ac[b]);
-  charts.age=new Chart(document.getElementById('chartAge'),{type:'bar',data:{labels:ahK,datasets:[{label:'Participants',data:ahV,backgroundColor:ahV.map((_,i)=>{const t=i/ahV.length;return 'rgba(240,'+Math.round(165*(1-t)+88*t)+','+Math.round(t*4)+',0.85)';}),borderColor:'transparent',borderRadius:3}]},options:{...co,plugins:{...co.plugins,legend:{display:false}},scales:{x:{ticks:{color:'#8b949e',font:{family:'Barlow Condensed',size:10}},grid:{color:'#21262d'}},y:{ticks:{color:'#8b949e',font:{family:'Barlow Condensed',size:10}},grid:{color:'#21262d'}}},onClick:(e,els)=>{if(!els.length)return;toggleFilter('ageGroups',ahK[els[0].index]);}}});
+  charts.age=new Chart(document.getElementById('chartAge'),{type:'bar',data:{labels:ahK,datasets:[{label:'Participants',data:ahV,backgroundColor:ahV.map((_,i)=>{const t=i/ahV.length;return 'rgba(240,'+Math.round(165*(1-t)+88*t)+','+Math.round(t*4)+',0.85)';}),borderColor:'transparent',borderRadius:3}]},options:{...co,plugins:{...co.plugins,legend:{display:false}},scales:{x:{ticks:{color:'#8b949e',font:{family:'Barlow Condensed',size:10}},grid:{color:'#e1e6eb'}},y:{ticks:{color:'#8b949e',font:{family:'Barlow Condensed',size:10}},grid:{color:'#e1e6eb'}}},onClick:(e,els)=>{if(!els.length)return;toggleFilter('ageGroups',ahK[els[0].index]);}}});
   const cc=CERT_NAMES.map((name,i)=>({name,count:webRows.filter(r=>r[CERT_COLS[i]]==='Yes').length})).filter(c=>c.count>0).sort((a,b)=>b.count-a.count);
-  charts.certs=new Chart(document.getElementById('chartCerts'),{type:'bar',data:{labels:cc.map(c=>c.name),datasets:[{data:cc.map(c=>c.count),backgroundColor:cc.map(c=>filters.certs.has(c.name)?'#f0a500':PIE_PALETTE[cc.indexOf(c)%PIE_PALETTE.length]+'cc'),borderColor:'transparent',borderRadius:3}]},options:{...co,indexAxis:'y',plugins:{...co.plugins,legend:{display:false},tooltip:{callbacks:{title:items=>(CERT_INFO[items[0].label]?.full)||items[0].label,afterBody:items=>{const i=CERT_INFO[items[0].label];return i?wrapTip(i.desc,46):'';}}}},scales:{x:{ticks:{color:'#8b949e',font:{family:'Barlow Condensed',size:10}},grid:{color:'#21262d'}},y:{ticks:{color:'#e6edf3',font:{family:'Barlow Condensed',size:12,weight:'700'},padding:4},grid:{color:'#21262d'},afterFit(scale){scale.width=220;}}},onClick:(e,els)=>{if(!els.length)return;toggleFilter('certs',cc[els[0].index].name);}}});
+  charts.certs=new Chart(document.getElementById('chartCerts'),{type:'bar',data:{labels:cc.map(c=>c.name),datasets:[{data:cc.map(c=>c.count),backgroundColor:cc.map(c=>filters.certs.has(c.name)?'#f0a500':PIE_PALETTE[cc.indexOf(c)%PIE_PALETTE.length]+'cc'),borderColor:'transparent',borderRadius:3}]},options:{...co,indexAxis:'y',plugins:{...co.plugins,legend:{display:false},tooltip:{callbacks:{title:items=>(CERT_INFO[items[0].label]?.full)||items[0].label,afterBody:items=>{const i=CERT_INFO[items[0].label];return i?wrapTip(i.desc,46):'';}}}},scales:{x:{ticks:{color:'#8b949e',font:{family:'Barlow Condensed',size:10}},grid:{color:'#e1e6eb'}},y:{ticks:{color:'#0d1117',font:{family:'Barlow Condensed',size:12,weight:'700'},padding:4},grid:{color:'#e1e6eb'},afterFit(scale){scale.width=220;}}},onClick:(e,els)=>{if(!els.length)return;toggleFilter('certs',cc[els[0].index].name);}}});
   const stC={};webRows.forEach(r=>{const s=(r['State']||'').trim();if(s)stC[s]=(stC[s]||0)+1;});
   document.getElementById('stateGrid').innerHTML=Object.entries(stC).sort((a,b)=>b[1]-a[1]).map(([s,c])=>'<div class="state-row" style="'+(filters.states.has(s)?'border-left-color:var(--accent)':'')+'" onclick="toggleFilter(\'states\',\''+jsAttr(s)+'\')"><span class="state-name">'+esc(s)+'</span><span class="state-count">'+c+'</span></div>').join('');
   const td=Object.entries(TRIVIA_COLS).map(([name,col])=>{const vals=winRows.map(r=>parseFloat(r[col])).filter(v=>!isNaN(v));return{name,count:vals.length,avg:vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:0};}).sort((a,b)=>b.count-a.count);
