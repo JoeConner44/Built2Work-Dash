@@ -285,13 +285,13 @@ footer{text-align:center;padding:16px;color:var(--muted);font-size:11px;border-t
 .chart-clickable{cursor:pointer;}
 
 /* ── BTW BRAND OVERRIDES ── */
-:root{--bg:#0d0d0d;--surface:#161616;--surface2:#1e1e1e;--surface3:#252525;--border:#333333;--accent:#ce0e2d;--accent2:#8f1220;--text:#f0f0f0;--muted:#9a9a9a;--green:#3fb950;--blue:#58a6ff;--red:#ce0e2d;--sidebar-w:300px;}
-header{background:#111111!important;border-bottom:3px solid #ce0e2d!important;box-shadow:0 2px 20px rgba(0,0,0,.5)!important;}
+:root{--bg:#ffffff;--surface:#f6f8fa;--surface2:#eaeef2;--surface3:#e1e6eb;--border:#d0d7de;--accent:#ce0e2d;--accent2:#8f1220;--text:#0d1117;--muted:#57606a;--green:#1a7f37;--blue:#0969da;--red:#ce0e2d;--sidebar-w:300px;}
+header{background:#ffffff!important;border-bottom:3px solid #ce0e2d!important;box-shadow:0 2px 12px rgba(0,0,0,.08)!important;}
 .h-hex{display:none!important;}
 .h-title h1{font-family:'Oswald',sans-serif!important;font-size:16px!important;font-weight:500!important;letter-spacing:2px!important;color:#0d1117!important;}
-.h-title p{font-size:10px!important;color:#666!important;}
+.h-title p{font-size:10px!important;color:#57606a!important;}
 .kpi-card{border-top:3px solid #ce0e2d!important;border-radius:4px!important;}
-.kpi-value{font-family:'Oswald',sans-serif!important;font-size:32px!important;color:#FFFFFF!important;}
+.kpi-value{font-family:'Oswald',sans-serif!important;font-size:32px!important;color:#0d1117!important;}
 .kpi-label{font-family:'Oswald',sans-serif!important;}
 .card-title .dot,.card-title .filter-active-badge{background:#ce0e2d!important;border-color:#ce0e2d!important;color:#fff!important;}
 .card-title .dot{width:5px!important;height:5px!important;transform:rotate(45deg)!important;border-radius:0!important;}
@@ -313,35 +313,35 @@ input[type=range]{accent-color:#ce0e2d!important;}
 footer{border-top:1px solid var(--border);}
 
 /* ── LOGIN SCREEN ── */
-#loginScreen{position:fixed;inset:0;z-index:1000;background:#0d0d0d;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;padding:32px;background-image:radial-gradient(ellipse at 15% 60%,rgba(206,14,45,.08) 0%,transparent 55%),radial-gradient(ellipse at 85% 20%,rgba(206,14,45,.05) 0%,transparent 50%);}
+#loginScreen{position:fixed;inset:0;z-index:1000;background:#ffffff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;padding:32px;background-image:radial-gradient(ellipse at 15% 60%,rgba(206,14,45,.06) 0%,transparent 55%),radial-gradient(ellipse at 85% 20%,rgba(206,14,45,.04) 0%,transparent 50%);}
 .login-logo{display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:4px;}
 .login-tagline{font-family:'Oswald',sans-serif;font-size:12px;font-weight:500;letter-spacing:3px;text-transform:uppercase;color:#ce0e2d;text-align:center;}
-.login-subtag{font-family:'Barlow Condensed',sans-serif;font-size:10px;color:#555;letter-spacing:2px;text-transform:uppercase;text-align:center;}
-.login-card{background:#161616;border:1px solid #2a2a2a;border-top:3px solid #ce0e2d;border-radius:4px;padding:32px 36px;width:100%;max-width:400px;display:flex;flex-direction:column;gap:16px;box-shadow:0 12px 60px rgba(0,0,0,.6);}
-.login-title{font-family:'Oswald',sans-serif;font-size:17px;font-weight:500;letter-spacing:2px;text-transform:uppercase;color:#777;text-align:center;}
+.login-subtag{font-family:'Barlow Condensed',sans-serif;font-size:10px;color:#57606a;letter-spacing:2px;text-transform:uppercase;text-align:center;}
+.login-card{background:#ffffff;border:1px solid #d0d7de;border-top:3px solid #ce0e2d;border-radius:4px;padding:32px 36px;width:100%;max-width:400px;display:flex;flex-direction:column;gap:16px;box-shadow:0 12px 40px rgba(0,0,0,.12);}
+.login-title{font-family:'Oswald',sans-serif;font-size:17px;font-weight:500;letter-spacing:2px;text-transform:uppercase;color:#57606a;text-align:center;}
 .login-field{display:flex;flex-direction:column;gap:6px;}
-.login-label{font-family:'Oswald',sans-serif;font-size:11px;font-weight:500;letter-spacing:1.5px;text-transform:uppercase;color:#bbb;}
-.login-input{font-family:'Barlow',sans-serif;font-size:14px;background:#1e1e1e;border:1.5px solid #333;color:#f0f0f0;padding:10px 14px;border-radius:4px;width:100%;transition:border-color .2s;}
+.login-label{font-family:'Oswald',sans-serif;font-size:11px;font-weight:500;letter-spacing:1.5px;text-transform:uppercase;color:#24292f;}
+.login-input{font-family:'Barlow',sans-serif;font-size:14px;background:#ffffff;border:1.5px solid #d0d7de;color:#0d1117;padding:10px 14px;border-radius:4px;width:100%;transition:border-color .2s;}
 .login-input:focus{outline:none;border-color:#ce0e2d;}
-.login-input::placeholder{color:#555;}
+.login-input::placeholder{color:#8b949e;}
 .login-btn{font-family:'Oswald',sans-serif;font-size:16px;font-weight:600;letter-spacing:2px;text-transform:uppercase;padding:13px 32px;border:none;border-radius:3px;background:#ce0e2d;color:#fff;cursor:pointer;transition:all .2s;margin-top:4px;box-shadow:0 4px 20px rgba(206,14,45,.3);}
 .login-btn:hover{background:#9f1825;box-shadow:0 4px 28px rgba(206,14,45,.5);}
 .login-btn:disabled{opacity:.5;cursor:not-allowed;}
 #loginError{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:.5px;color:#ce0e2d;text-align:center;min-height:18px;}
-.login-divider{border:none;border-top:1px solid #2a2a2a;}
-.login-footer{font-size:11px;color:#444;text-align:center;letter-spacing:.5px;}
+.login-divider{border:none;border-top:1px solid #d0d7de;}
+.login-footer{font-size:11px;color:#57606a;text-align:center;letter-spacing:.5px;}
 /* ── LOADING OVERLAY ── */
-#loadingOverlay{position:fixed;inset:0;z-index:500;background:rgba(13,13,13,.9);display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;}
-.spinner{width:42px;height:42px;border:3px solid #333;border-top-color:#ce0e2d;border-radius:50%;animation:spin .8s linear infinite;}
+#loadingOverlay{position:fixed;inset:0;z-index:500;background:rgba(255,255,255,.9);display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;}
+.spinner{width:42px;height:42px;border:3px solid #d0d7de;border-top-color:#ce0e2d;border-radius:50%;animation:spin .8s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
-.loading-text{font-family:'Barlow Condensed',sans-serif;font-size:13px;letter-spacing:2px;text-transform:uppercase;color:#9a9a9a;}
+.loading-text{font-family:'Barlow Condensed',sans-serif;font-size:13px;letter-spacing:2px;text-transform:uppercase;color:#57606a;}
 /* ── DIAGNOSTIC BOX ── */
-.diag-box{background:#1e1e1e;border:1px solid #333;border-radius:4px;padding:12px 14px;font-family:'Barlow Condensed',sans-serif;font-size:12px;line-height:1.8;display:none;}
+.diag-box{background:#f6f8fa;border:1px solid #d0d7de;border-radius:4px;padding:12px 14px;font-family:'Barlow Condensed',sans-serif;font-size:12px;line-height:1.8;display:none;}
 .diag-box.visible{display:block;}
 .diag-row{display:flex;align-items:flex-start;gap:8px;}
 .diag-icon{flex-shrink:0;font-size:13px;}
 .diag-ok{color:#3fb950;}.diag-fail{color:#ce0e2d;}.diag-warn{color:#f0a500;}.diag-wait{color:#9a9a9a;}
-.diag-btn{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:7px 16px;border:1.5px solid #333;background:transparent;color:#9a9a9a;border-radius:4px;cursor:pointer;transition:all .2s;width:100%;}
+.diag-btn{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:7px 16px;border:1.5px solid #d0d7de;background:transparent;color:#57606a;border-radius:4px;cursor:pointer;transition:all .2s;width:100%;}
 .diag-btn:hover{border-color:#58a6ff;color:#58a6ff;}
 /* ── CERT CARD TALL ── */
 #cCerts.tall{grid-row:span 2;}
@@ -607,7 +607,7 @@ footer{border-top:1px solid var(--border);}
 /* Distance column */
 .dist-badge{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;color:var(--muted);}
 /* Floating tooltip (ported from customer.html) */
-#floatTip{position:fixed;z-index:9999;background:#1e1e1e;border:1px solid #555;color:#e0e0e0;font-family:'Barlow',sans-serif;font-size:12px;font-weight:400;padding:9px 13px;border-radius:5px;max-width:280px;line-height:1.5;text-align:left;pointer-events:none;box-shadow:0 4px 16px rgba(0,0,0,.6);white-space:pre-line;display:none;}
+#floatTip{position:fixed;z-index:9999;background:#ffffff;border:1px solid #d0d7de;color:#0d1117;font-family:'Barlow',sans-serif;font-size:12px;font-weight:400;padding:9px 13px;border-radius:5px;max-width:280px;line-height:1.5;text-align:left;pointer-events:none;box-shadow:0 4px 16px rgba(0,0,0,.15);white-space:pre-line;display:none;}
 /* Pipeline notification badge + activity feed */
 .pipe-badge{display:inline-block;min-width:16px;padding:1px 5px;margin-left:4px;background:#ce0e2d;color:#fff;border-radius:9px;font-size:10px;font-weight:700;text-align:center;vertical-align:middle;}
 .feed-head{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);padding:10px 18px;cursor:pointer;user-select:none;border-bottom:1px solid var(--border);background:var(--surface);}
@@ -698,7 +698,7 @@ footer{border-top:1px solid var(--border);}
 </header>
 
 
-<div id="pipeTabBar" style="display:none;background:#111;border-bottom:1px solid var(--border);padding:0 18px;flex-shrink:0;display:none;">
+<div id="pipeTabBar" style="display:none;background:#ffffff;border-bottom:1px solid var(--border);padding:0 18px;flex-shrink:0;display:none;">
   <button class="pipe-tab active" id="tabAnalytics" onclick="switchPipeTab('analytics')" style="font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:11px 18px;background:transparent;border:none;border-bottom:2px solid #ce0e2d;color:#ce0e2d;cursor:pointer;margin-bottom:-1px;">&#9632; Analytics</button>
   <button class="pipe-tab" id="tabPipeline" onclick="switchPipeTab('pipeline')" style="font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:11px 18px;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;margin-bottom:-1px;">&#9632; Pipeline <span id="pipeBadge" class="pipe-badge" style="display:none">0</span></button>
   <button class="pipe-tab" id="tabLeads" onclick="switchPipeTab('leads')" style="font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:11px 18px;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;margin-bottom:-1px;">&#9632; Internet Leads</button>
