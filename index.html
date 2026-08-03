@@ -2859,7 +2859,9 @@ function onGeoInput(val){
     try{
       const url=`https://api.mapbox.com/search/searchbox/v1/suggest?${params}`;
       const data=await fetch(url).then(r=>r.json());
-      if(!floatSugg||!data.suggestions||!data.suggestions.length){if(floatSugg)floatSugg.style.display='none';return;}
+      // fetch does not throw on 401/403, so surface a Mapbox error body (e.g. bad
+      // token) instead of silently showing no suggestions.
+      if(!floatSugg||!data.suggestions||!data.suggestions.length){if(floatSugg)floatSugg.style.display='none';if(data&&data.message)document.getElementById('geoStatus').textContent='⚠ '+data.message;return;}
       const inp=document.getElementById('geoAddressInput');
       const rect=inp.getBoundingClientRect();
       floatSugg.style.left=rect.left+'px';
@@ -2870,7 +2872,7 @@ function onGeoInput(val){
         return `<div class="geo-suggestion" onclick="selectGeoSuggestion('${jsAttr(s.mapbox_id)}','${jsAttr(name)}')">${esc(name)}</div>`;
       }).join('');
       floatSugg.style.display='block';
-    }catch(e){console.warn('Geocode autocomplete error',e);}
+    }catch(e){console.warn('Geocode autocomplete error',e);document.getElementById('geoStatus').textContent='⚠ Address lookup failed';}
   },300);
 }
 
