@@ -557,13 +557,15 @@ function cOnGeoInput(val){
       const params=new URLSearchParams({q:val,country:'US',types:'address,street,place,postcode,locality,neighborhood',limit:'5',session_token:cGeoSessionToken(),access_token:MAPBOX_TOKEN});
       const url=`https://api.mapbox.com/search/searchbox/v1/suggest?${params}`;
       const data=await fetch(url).then(r=>r.json());
-      if(!data.suggestions||!data.suggestions.length){sug.style.display='none';return;}
+      // fetch does not throw on 401/403, so surface a Mapbox error body (e.g. bad
+      // token) instead of silently showing no suggestions.
+      if(!data.suggestions||!data.suggestions.length){sug.style.display='none';if(data&&data.message)document.getElementById('cGeoStatus').textContent='⚠ '+data.message;return;}
       sug.innerHTML=data.suggestions.map(s=>{
         const name=s.full_address||(s.name?s.name+(s.place_formatted?', '+s.place_formatted:''):'')||s.place_formatted||'';
         return `<div onclick="cSelectGeo('${jsAttr(s.mapbox_id)}','${jsAttr(name)}')">${esc(name)}</div>`;
       }).join('');
       sug.style.display='block';
-    }catch(e){console.warn(e);}
+    }catch(e){console.warn(e);document.getElementById('cGeoStatus').textContent='⚠ Address lookup failed';}
   },300);
 }
 
