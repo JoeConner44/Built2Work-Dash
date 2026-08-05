@@ -50,8 +50,16 @@ block (~line 288). The override block wins, so edit it (or both) when changing t
 palette. `operations.html` and `customer.html` each have a single `:root`.
 
 The theme is light (white background, near-black text, red `#ce0e2d` brand accent).
-Exceptions kept intentionally dark: the login screens (`#loginScreen` and `.login-*`
-on `index.html` and `customer.html`).
+The login screens (`#loginScreen` and `.login-*` on `index.html` and `customer.html`)
+are also light/white to match the rest of the app.
+
+## Logo
+
+The Built to Work logo is a single shared file, `assets/logo.png`, referenced by every
+page header and login screen via `<img src="assets/logo.png" alt="Built to Work">`. To
+change the logo, replace that one file (see `assets/README.md`). Note: the PDF export in
+`index.html` keeps its own base64 copy (the `LOGO` constant) that must be updated
+separately.
 
 ## Git / branch conventions
 
