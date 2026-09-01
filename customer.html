@@ -56,12 +56,6 @@ td{padding:9px 10px;border-bottom:1px solid #e1e6eb;font-size:12px;vertical-alig
 tr:hover td{background:var(--surface2);}
 .td-name{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;cursor:pointer;white-space:nowrap;}
 .td-name:hover{color:var(--accent);}
-.score-badge{display:inline-block;font-family:'Oswald',sans-serif;font-size:12px;font-weight:700;padding:2px 8px;border-radius:3px;background:rgba(206,14,45,.2);color:#ce0e2d;min-width:34px;text-align:center;}
-.score-badge.hi{background:rgba(63,185,80,.2);color:var(--green);}
-.score-badge.dnc{background:rgba(139,148,158,.15);color:var(--muted);}
-.ip-yes{color:var(--green);font-weight:700;}
-.ip-maybe{color:var(--amber);font-weight:700;}
-.ip-no{color:#f85149;}
 .status-sel{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;padding:3px 20px 3px 8px;border-radius:3px;border:none;cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%2357606a'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 5px center;}
 .s-nc{background:rgba(139,148,158,.2);color:#57606a;}
 .s-co{background:rgba(9,105,218,.12);color:#0969da;}
@@ -136,7 +130,7 @@ tr:hover td{background:var(--surface2);}
     </div>
   </header>
   <div class="toolbar">
-    <input class="tb-search" id="searchBox" placeholder="Search name, phone, city, certs, job&hellip;" oninput="renderCandidates()">
+    <input class="tb-search" id="searchBox" placeholder="Search candidate ID, city, certs, job&hellip;" oninput="renderCandidates()">
     <select class="tb-select" id="statusFilter" onchange="renderCandidates()">
       <option value="">All Statuses</option>
       <option>Not Contacted</option><option>Contacted</option>
@@ -164,10 +158,9 @@ tr:hover td{background:var(--surface2);}
       <thead><tr>
         <th id="distColHead" style="display:none">Distance</th>
         <th onclick="sortBy('hopeful')">Hopeful Job &#8597;</th>
-        <th onclick="sortBy('name')">Name &#8597;</th>
+        <th onclick="sortBy('name')">Candidate &#8597;</th>
         <th onclick="sortBy('city')">City &#8597;</th>
         <th onclick="sortBy('state')">State &#8597;</th>
-        <th>Phone</th><th>Email</th>
         <th onclick="sortBy('exc')">EXC &#8597;</th>
         <th>Certifications</th>
         <th>Work History</th>
@@ -261,7 +254,11 @@ function hideTip(){
 }
 
 // normalizePhone() lives in shared.js
-function fmtDate(str){if(!str)return '—';return new Date(str).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});}
+
+// Candidates are shown to companies without name/phone/email/address — this
+// stable short label (derived from the assignment id, never from PII) is
+// what the company sees and can reference instead of a real name.
+function candLabel(a){return 'Candidate #'+String(a.id||'').replace(/-/g,'').slice(0,6).toUpperCase();}
 
 window.addEventListener('DOMContentLoaded',async()=>{
   document.getElementById('loginPassword').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
@@ -313,7 +310,10 @@ async function loadData(){
   assignments=asgn||[];
   const phones=assignments.map(a=>a.phone);
   if(!phones.length){renderCandidates();return;}
-  const webCols = '"Mobile Phone","First Name","Last Name","DOB","Street Address","City","State","Email Address","Gender","Job Status","Interested in Construction Jobs","What industry do you work in?","What industry do you work in","lat","lng","Trade Certifications or Licenses","Trade Certifications or Licenses_1","Trade Certifications or Licenses_2","Trade Certifications or Licenses_3","Trade Certifications or Licenses_4","Trade Certifications or Licenses_5","Trade Certifications or Licenses_6","Trade Certifications or Licenses_7","Trade Certifications or Licenses_8","Trade Certifications or Licenses_9","Trade Certifications or Licenses_10","Trade Certifications or Licenses_11","Trade Certifications or Licenses_12","Trade Certifications or Licenses_13","Trade Certifications or Licenses_14","Trade Certifications or Licenses_15"';
+  // Only "Mobile Phone" is fetched for record-matching purposes — it is never
+  // displayed. Name/email/street-address/DOB are intentionally NOT selected
+  // here so PII never reaches the customer portal, not even hidden in the DOM.
+  const webCols = '"Mobile Phone","City","State","Job Status","What industry do you work in?","What industry do you work in","lat","lng","Trade Certifications or Licenses","Trade Certifications or Licenses_1","Trade Certifications or Licenses_2","Trade Certifications or Licenses_3","Trade Certifications or Licenses_4","Trade Certifications or Licenses_5","Trade Certifications or Licenses_6","Trade Certifications or Licenses_7","Trade Certifications or Licenses_8","Trade Certifications or Licenses_9","Trade Certifications or Licenses_10","Trade Certifications or Licenses_11","Trade Certifications or Licenses_12","Trade Certifications or Licenses_13","Trade Certifications or Licenses_14","Trade Certifications or Licenses_15"';
   // Build a Set of normalized phones for fast lookup
   const phoneSet = new Set(phones);
 
@@ -367,15 +367,14 @@ function renderCandidates(){
   const status=document.getElementById('statusFilter').value;
   let rows=assignments.map(a=>{
     const w=webData[a.phone]||{},e=excData[a.phone]||{},t=triviaData[a.phone]||{};
-    const name=((w['First Name']||'')+' '+(w['Last Name']||'')).trim()||('Phone: '+a.phone);
+    const label=candLabel(a);
     const certs=CERT_NAMES.filter((_,i)=>(w[CERT_COLS[i]]||'').trim()==='Yes');
-    return {...a,name,_w:w,_e:e,_t:t,certs};
+    return {...a,label,_w:w,_e:e,_t:t,certs};
   });
   if(status)rows=rows.filter(r=>r.status===status);
   if(q)rows=rows.filter(r=>{
     const w=r._w;
-    return r.name.toLowerCase().includes(q)||r.phone.includes(q)||
-      (w['Email Address']||'').toLowerCase().includes(q)||
+    return r.label.toLowerCase().includes(q)||
       (w['City']||'').toLowerCase().includes(q)||(w['State']||'').toLowerCase().includes(q)||
       (r.hopeful_job||'').toLowerCase().includes(q)||(r.current_job||'').toLowerCase().includes(q)||
       r.certs.some(c=>c.toLowerCase().includes(q));
@@ -393,7 +392,7 @@ function renderCandidates(){
       rows.sort((a,b)=>{
     let av,bv;
     if(sortState.col==='hopeful'){av=a.hopeful_job||'';bv=b.hopeful_job||'';}
-    else if(sortState.col==='name'){av=a.name;bv=b.name;}
+    else if(sortState.col==='name'){av=a.label;bv=b.label;}
     else if(sortState.col==='city'){av=a._w['City']||'';bv=b._w['City']||'';}
     else if(sortState.col==='state'){av=a._w['State']||'';bv=b._w['State']||'';}
     else if(sortState.col==='exc'){av=a._e.total??-1;bv=b._e.total??-1;}
@@ -404,7 +403,7 @@ function renderCandidates(){
   };
   document.getElementById('countLabel').textContent=rows.length.toLocaleString()+' candidates';
   const tbody=document.getElementById('tbody');
-  if(!rows.length){tbody.innerHTML='<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--muted);font-style:italic;">No candidates found.</td></tr>';return;}
+  if(!rows.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--muted);font-style:italic;">No candidates found.</td></tr>';return;}
   tbody.innerHTML=rows.map(r=>{
     const w=r._w,e=r._e;
     const excScore=e.total!=null?e.total:null;
@@ -412,15 +411,12 @@ function renderCandidates(){
     const statusOpts=STATUSES.map(s=>`<option${s===r.status?' selected':''}>${s}</option>`).join('');
     const sc=STATUS_MAP[r.status]||'s-nc';
     const certDisplay=r.certs.length?r.certs.slice(0,2).join(', ')+(r.certs.length>2?` +${r.certs.length-2}`:''):'—';
-    const phone=w['Mobile Phone']?String(w['Mobile Phone']).split('.')[0].replace(/[^\d]/g,''):r.phone;
     const distTd=geoFilter.active?(r._dist!=null?`<td><span class="dist-badge">${r._dist.toFixed(1)} mi</span></td>`:'<td><span class="dist-badge">—</span></td>'):'';
     return `<tr>
       ${distTd}<td style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--blue);white-space:nowrap">${esc(r.hopeful_job)||'—'}</td>
-      <td class="td-name" onclick="showDetail('${jsAttr(r.phone)}')">${esc(r.name)}</td>
+      <td class="td-name" onclick="showDetail('${jsAttr(r.phone)}')">${esc(r.label)}</td>
       <td style="font-family:'Barlow Condensed',sans-serif;white-space:nowrap">${esc(w['City'])||'—'}</td>
       <td style="font-family:'Barlow Condensed',sans-serif;font-weight:700">${esc(w['State'])||'—'}</td>
-      <td style="color:var(--muted);font-size:11px;white-space:nowrap">${esc(phone)}</td>
-      <td style="color:var(--muted);font-size:11px;max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(w['Email Address'])||'—'}</td>
       <td>${excBadge}</td>
       <td style="font-size:11px;max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(r.certs.join(', '))}">${esc(certDisplay)}</td>
       <td style="font-size:11px;color:var(--muted);max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(r.work_history)}">${esc(r.work_history)||'—'}</td>
@@ -460,9 +456,7 @@ async function updateStatus(id,sel){
   if(s===prev)return;
   let reason=null;
   if(s==='Rejected'){
-    const w=a?webData[a.phone]:null;
-    const name=w?((w['First Name']||'')+' '+(w['Last Name']||'')).trim():'';
-    reason=await promptRejectReason(name);
+    reason=await promptRejectReason(a?candLabel(a):'');
     if(reason===null){sel.value=prev;return;} // cancelled — revert, no write
   }
   const updates={status:s,rejection_reason:s==='Rejected'?reason:null};
@@ -477,17 +471,15 @@ async function updateStatus(id,sel){
 function showDetail(phone){
   const a=assignments.find(x=>x.phone===phone)||{};
   const w=webData[phone]||{},e=excData[phone]||{},t=triviaData[phone]||{};
-  const name=((w['First Name']||'')+' '+(w['Last Name']||'')).trim()||('Phone: '+phone);
+  const label=candLabel(a);
   const certs=CERT_NAMES.filter((_,i)=>(w[CERT_COLS[i]]||'').trim()==='Yes');
-  const rawPhone=w['Mobile Phone']?String(w['Mobile Phone']).split('.')[0].replace(/[^\d]/g,''):phone;
   const ind=(w['What industry do you work in?']||'').trim();
   const indOther=(w['What industry do you work in']||'').trim();
   const industry=ind==='Other'&&indOther?'Other: '+indOther:ind||'—';
   const empMap={'Currently employed in construction and/or a trade':'In Trades','Currently employed in another industry':'Other Industry','Retired':'Retired','Student':'Student','Unemployed and looking for work':'Unemployed','Other':'Other'};
   const employment=empMap[w['Job Status']||'']||w['Job Status']||'—';
-  const ji=w['Interested in Construction Jobs']||'—';
-  document.getElementById('detName').textContent=name;
-  document.getElementById('detSub').innerHTML=esc(rawPhone)+' &bull; '+(esc(w['Email Address'])||'—')+' &bull; '+esc(w['City'])+' '+esc(w['State']);
+  document.getElementById('detName').textContent=label;
+  document.getElementById('detSub').innerHTML=(esc(w['City'])||'—')+', '+(esc(w['State'])||'—');
   let html='';
   const statusCls=STATUS_MAP[a.status]||'s-nc';
   html+=`<div class="det-section"><div class="det-section-title">Assignment</div>
@@ -501,9 +493,8 @@ function showDetail(phone){
     ${a.work_history?`<div class="det-item" style="margin-top:10px;grid-column:span 2"><div class="det-item-label">Work History</div><div class="det-item-val" style="font-size:13px;font-weight:400;font-family:'Barlow',sans-serif;white-space:pre-wrap">${esc(a.work_history)}</div></div>`:''}
     ${a.file_url?`<div style="margin-top:10px"><a href="${a.file_url}" target="_blank" style="font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;color:var(--blue);text-decoration:none;display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1.5px solid var(--blue);border-radius:4px;">&#128206; View Attachment</a></div>`:''}
   </div>`;
-  html+=`<div class="det-section"><div class="det-section-title">Personal Info</div><div class="det-grid">
-    <div class="det-item"><div class="det-item-label">Address</div><div class="det-item-val" style="font-size:13px;font-weight:400;font-family:'Barlow',sans-serif">${esc(w['Street Address'])||'—'}<br>${esc(w['City'])} ${esc(w['State'])}</div></div>
-    <div class="det-item"><div class="det-item-label">Email</div><div class="det-item-val" style="font-size:12px;font-weight:400;font-family:'Barlow',sans-serif;word-break:break-all">${esc(w['Email Address'])||'—'}</div></div>
+  html+=`<div class="det-section"><div class="det-section-title">Location &amp; Employment</div><div class="det-grid">
+    <div class="det-item"><div class="det-item-label">City / State</div><div class="det-item-val" style="font-size:13px">${(esc(w['City'])||'—')+', '+(esc(w['State'])||'—')}</div></div>
     <div class="det-item"><div class="det-item-label">Employment</div><div class="det-item-val" style="font-size:13px">${esc(employment)}</div></div>
     <div class="det-item"><div class="det-item-label">Industry</div><div class="det-item-val" style="font-size:13px">${esc(industry)}</div></div>
   </div></div>`;
@@ -666,17 +657,15 @@ async function uploadDetFile(id,input){
 // ─── EXCEL EXPORT ─────────────────────────────────────────────────────────
 function exportExcel(){
   if(typeof XLSX==='undefined'){alert('Loading\u2026');return;}
-  const head=['Name','Phone','Email','Address','City','State','Employment',
+  const head=['Candidate','City','State','Employment',
     'EXC Score','EXC Safety','EXC Productivity','Certifications',
     'Hopeful Job','Pay Scale','Current Job','Work History','Status','File'];
   const rows=assignments.map(a=>{
     const w=webData[a.phone]||{};
     const e=excData[a.phone]||{};
     const certs=CERT_NAMES.filter((_,i)=>(w[CERT_COLS[i]]||'').trim()==='Yes').join(', ');
-    const name=((w['First Name']||'')+' '+(w['Last Name']||'')).trim()||a.phone;
-    const phone=w['Mobile Phone']?String(w['Mobile Phone']).split('.')[0].replace(/[^\d]/g,''):a.phone;
     return [
-      name, phone, w['Email Address']||'', w['Street Address']||'',
+      candLabel(a),
       w['City']||'', w['State']||'',
       w['Job Status']||'',
       e.total!=null?e.total.toFixed(0):'DNC',
@@ -689,7 +678,7 @@ function exportExcel(){
   });
   const wb=XLSX.utils.book_new();
   const ws=XLSX.utils.aoa_to_sheet([head,...rows]);
-  ws['!cols']=[{wch:22},{wch:14},{wch:28},{wch:24},{wch:14},{wch:8},{wch:18},
+  ws['!cols']=[{wch:16},{wch:14},{wch:8},{wch:18},
                {wch:10},{wch:10},{wch:12},{wch:36},{wch:20},{wch:14},{wch:20},{wch:28},{wch:16},{wch:40}];
   ws['!freeze']={xSplit:0,ySplit:1,topLeftCell:'A2',activeCell:'A2',sqref:'A2'};
   XLSX.utils.book_append_sheet(wb,ws,'Candidates');

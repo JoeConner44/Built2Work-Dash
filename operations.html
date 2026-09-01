@@ -418,7 +418,6 @@ function render(){
   const comparing=selectedEvents.size>1;
 
   // ── Top KPIs ──────────────────────────────────────────────────────────────
-  const peakIdx=D.byHour.indexOf(Math.max(...D.byHour));
   document.getElementById('kpiRow').innerHTML=`
     <div class="kpi-card"><div class="kpi-label">Completion Rate</div><div class="kpi-value">${fmtPct(excF.length,webF.length)}</div><div class="kpi-sub">${excF.length.toLocaleString()} of ${webF.length.toLocaleString()} ran EXC</div></div>
     <div class="kpi-card accent-blue"><div class="kpi-label">Median Wait &rarr; EXC</div><div class="kpi-value">${fmtMin(median(D.excWaitMin))}</div><div class="kpi-sub">Registration to simulator</div></div>
