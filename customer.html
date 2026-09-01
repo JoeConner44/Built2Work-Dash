@@ -56,12 +56,6 @@ td{padding:9px 10px;border-bottom:1px solid #e1e6eb;font-size:12px;vertical-alig
 tr:hover td{background:var(--surface2);}
 .td-name{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;cursor:pointer;white-space:nowrap;}
 .td-name:hover{color:var(--accent);}
-.score-badge{display:inline-block;font-family:'Oswald',sans-serif;font-size:12px;font-weight:700;padding:2px 8px;border-radius:3px;background:rgba(206,14,45,.2);color:#ce0e2d;min-width:34px;text-align:center;}
-.score-badge.hi{background:rgba(63,185,80,.2);color:var(--green);}
-.score-badge.dnc{background:rgba(139,148,158,.15);color:var(--muted);}
-.ip-yes{color:var(--green);font-weight:700;}
-.ip-maybe{color:var(--amber);font-weight:700;}
-.ip-no{color:#f85149;}
 .status-sel{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;padding:3px 20px 3px 8px;border-radius:3px;border:none;cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%2357606a'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 5px center;}
 .s-nc{background:rgba(139,148,158,.2);color:#57606a;}
 .s-co{background:rgba(9,105,218,.12);color:#0969da;}
@@ -260,7 +254,6 @@ function hideTip(){
 }
 
 // normalizePhone() lives in shared.js
-function fmtDate(str){if(!str)return '—';return new Date(str).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});}
 
 // Candidates are shown to companies without name/phone/email/address — this
 // stable short label (derived from the assignment id, never from PII) is
