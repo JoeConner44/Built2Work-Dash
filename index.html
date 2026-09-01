@@ -589,7 +589,6 @@ footer{border-top:1px solid var(--border);}
 .geo-input{width:100%;font-family:'Barlow',sans-serif;font-size:12px;background:var(--surface2);border:1.5px solid var(--border);color:var(--text);padding:7px 10px;border-radius:4px;transition:border-color .2s;}
 .geo-input:focus{outline:none;border-color:var(--accent);}
 .geo-input.active{border-color:var(--accent);background:rgba(206,14,45,.06);}
-.geo-suggestions{position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-top:none;border-radius:0 0 4px 4px;z-index:300;max-height:180px;overflow-y:auto;}
 .geo-suggestion{padding:7px 10px;font-size:12px;cursor:pointer;color:var(--text);transition:background .1s;}
 .geo-suggestion:hover{background:var(--surface2);}
 .geo-radius-row{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
@@ -785,7 +784,6 @@ footer{border-top:1px solid var(--border);}
       <div class="geo-address-wrap">
         <input class="geo-input" id="geoAddressInput" placeholder="Enter address or zip code…"
           oninput="onGeoInput(this.value)" autocomplete="off">
-        <div class="geo-suggestions" id="geoSuggestions" style="display:none"></div>
       </div>
       <div class="geo-radius-row">
         <span class="geo-radius-label">Radius</span>
@@ -2416,6 +2414,24 @@ async function unassignCandidate(){
   setTimeout(()=>document.getElementById('assignOverlay').classList.remove('open'), 700);
 }
 
+// A participant can only be shared with one company (or sit in the
+// unassigned pool) at a time. Before writing a new candidate_assignments
+// row for a phone, remove every other row for that phone — otherwise the
+// same candidate could end up assigned to multiple companies simultaneously.
+// `excludeId` protects the row currently being edited in place (pipeline
+// edit updates a row by id rather than delete+insert).
+async function clearOtherAssignments(phone, keepCompanyId, excludeId){
+  let q1 = sb.from('candidate_assignments').delete().eq('phone', phone);
+  q1 = keepCompanyId ? q1.neq('company_id', keepCompanyId) : q1.not('company_id', 'is', null);
+  if(excludeId) q1 = q1.neq('id', excludeId);
+  await q1;
+  if(keepCompanyId){
+    let q2 = sb.from('candidate_assignments').delete().eq('phone', phone).is('company_id', null);
+    if(excludeId) q2 = q2.neq('id', excludeId);
+    await q2;
+  }
+}
+
 async function saveAssignment(){
   const companyId = document.getElementById('assignCompany').value;
   if(!companyId){ document.getElementById('assignMsg').textContent='Please select a company.'; return; }
@@ -2450,6 +2466,10 @@ async function saveAssignment(){
     status:       'Not Contacted',
   };
   if(fileUrl) payload.file_url = fileUrl;
+
+  // Enforce one company at a time: drop any other assignment for this phone
+  // (a different company, or the unassigned pool) before writing this one.
+  await clearOtherAssignments(assignPhone, companyId);
 
   const {error} = await sb.from('candidate_assignments')
     .upsert(payload, {onConflict:'phone,company_id'});
@@ -2702,7 +2722,11 @@ async function saveBulkAssignment(){
   const assignedBy  = user?.email||'';
   // Build upsert rows for all pinned phones
   const workHistory = document.getElementById('bulkWorkHistory').value.trim();
-  const rows=[...pinnedPhones].map(phone=>({
+  const phonesArr=[...pinnedPhones];
+  // Enforce one company at a time for every selected candidate before
+  // writing the new rows.
+  await Promise.all(phonesArr.map(phone=>clearOtherAssignments(phone, companyId)));
+  const rows=phonesArr.map(phone=>({
     phone, company_id:companyId,
     hopeful_job:hopefulJob, pay_scale:payScale,
     current_job:currentJob, work_history:workHistory,
@@ -2813,6 +2837,10 @@ async function savePipeEdit(){
     notes:        document.getElementById('pipeEditNotes').value.trim(),
     file_url:     fileUrl,
   };
+
+  // Enforce one company at a time: drop any other assignment row for this
+  // phone (keeping the row being edited) before retargeting its company.
+  await clearOtherAssignments(r.phone, newCompanyId, pipeEditId);
 
   const {error} = await sb.from('candidate_assignments').update(updates).eq('id', pipeEditId);
   if(error){ msg.style.color='#f85149'; msg.textContent='Error: '+error.message; return; }
@@ -3050,8 +3078,10 @@ async function saveToUnassigned(){
   msg.style.color='var(--muted)'; msg.textContent='Saving\u2026';
   const {data:{user}} = await sb.auth.getUser();
 
-  // Delete any existing unassigned entry for this phone (null company_id)
-  // Can't upsert on null, so delete+insert
+  // Enforce one company at a time: drop any active company assignment for
+  // this phone, then any existing unassigned entry (can't upsert on a null
+  // company_id, so delete+insert) before writing the fresh pool row.
+  await clearOtherAssignments(assignPhone, null);
   await sb.from('candidate_assignments')
     .delete().eq('phone', assignPhone).is('company_id', null);
 
@@ -3084,7 +3114,9 @@ async function bulkAddToUnassigned(){
   const notes       = document.getElementById('bulkNotes').value.trim();
   const phones      = [...pinnedPhones];
 
-  // Delete existing unassigned entries for these phones first
+  // Enforce one company at a time: drop any active company assignment, then
+  // any existing unassigned entry, for each phone before writing fresh rows.
+  await Promise.all(phones.map(phone=>clearOtherAssignments(phone, null)));
   for(const phone of phones){
     await sb.from('candidate_assignments')
       .delete().eq('phone', phone).is('company_id', null);

@@ -18,8 +18,8 @@ change to `index.html` or `customer.html`, verify it still works (checklist belo
 - `index.html`: input `#geoAddressInput` (`oninput="onGeoInput()"`), floating results
   container `#geoFloatSugg` (a `position:fixed` div right before `</body>`),
   handlers `onGeoInput()` / `selectGeoSuggestion()` (~lines 2840–2895).
-  Note: `#geoSuggestions` (line ~788) is a leftover, unused inline container — the
-  live dropdown is `#geoFloatSugg`. Do not wire code back to `#geoSuggestions`.
+  The old `#geoSuggestions` leftover container has been removed — the only
+  dropdown is `#geoFloatSugg`. Do not reintroduce a second one.
 - `customer.html`: input `#cGeoInput`, dropdown `#cGeoSugg`, handlers
   `cOnGeoInput()` / `cSelectGeo()` (~lines 538–620).
 
