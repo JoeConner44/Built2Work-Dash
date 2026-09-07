@@ -37,16 +37,7 @@ drop policy if exists "Staff full access - assignments" on candidate_assignments
 create policy "Staff full access - assignments" on candidate_assignments
   for all using (is_admin()) with check (is_admin());
 
--- ============================================================================
--- NOT included above — needs your confirmation first:
---
---   drop policy "Anon can read web_registration" on web_registration;
---
--- This is the ANON one (no login at all). It's the most severe of the bunch,
--- but "web_registration" sounds exactly like the kind of table a public sign-up
--- form (outside this dashboard codebase) might read from directly with the
--- anon key before letting someone register — e.g. to check "have you already
--- signed up?". If nothing outside this dashboard touches web_registration as
--- anon, drop it. If you're not sure, ask whoever built the registration
--- form/site, or just try dropping it and watch whether that form breaks.
--- ============================================================================
+-- Confirmed 2026-09-07: nothing outside this dashboard reads web_registration
+-- as an unauthenticated user, so the most severe policy of the bunch — full
+-- table read with no login at all — comes out too.
+drop policy if exists "Anon can read web_registration" on web_registration;
