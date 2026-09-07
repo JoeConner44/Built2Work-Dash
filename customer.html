@@ -510,7 +510,25 @@ function sortBy(col){sortState.dir=sortState.col===col?-sortState.dir:1;sortStat
 function payRangeStr(r){
   return (r.pay_min!=null||r.pay_max!=null) ? ('$'+(r.pay_min??'?')+'–$'+(r.pay_max??'?')) : '—';
 }
+// Among a candidate's trivia tests, the highest percentile that still meets
+// minPct — used when no single test is picked but a percentile floor is, so
+// each candidate shows/sorts by whichever of their tests best qualifies.
+function bestQualifyingTrivia(r,minPct){
+  let best=null;
+  Object.entries(r.triviaPcts).forEach(([name,p])=>{
+    if(p>=minPct&&(!best||p>best.pct)) best={name,pct:p};
+  });
+  return best;
+}
 function triviaCellStr(r){
+  if(filters.triviaTest){
+    const p=r.triviaPcts[filters.triviaTest];
+    return p!=null?(filters.triviaTest+': '+p+getOrdinalSuffix(p)+' pctl'):'—';
+  }
+  if(filters.triviaMinPct>0){
+    const best=bestQualifyingTrivia(r,filters.triviaMinPct);
+    return best?(best.name+': '+best.pct+getOrdinalSuffix(best.pct)+' pctl'):'—';
+  }
   const entries=Object.entries(r.triviaPcts);
   if(!entries.length) return '—';
   return entries.map(([nm,p])=>nm+': '+p+getOrdinalSuffix(p)+' pctl').join(', ');
@@ -519,13 +537,19 @@ function triviaCellStr(r){
 function renderCandidates(){
   const q=document.getElementById('searchBox').value.toLowerCase().trim();
   let rows=directory.slice();
+  const testMode=!!filters.triviaTest;       // one specific test chosen
+  const pctMode=filters.triviaMinPct>0;      // a percentile floor is set
 
   if(filters.excCats.size) rows=rows.filter(r=>filters.excCats.has(excCategory(r.excScore)));
   if(filters.certs.size) rows=rows.filter(r=>r.certs.some(c=>filters.certs.has(c)));
-  if(filters.triviaTest) rows=rows.filter(r=>{
-    const p=r.triviaPcts[filters.triviaTest];
-    return p!=null && p>=filters.triviaMinPct;
-  });
+  if(testMode){
+    rows=rows.filter(r=>{
+      const p=r.triviaPcts[filters.triviaTest];
+      return p!=null && p>=filters.triviaMinPct;
+    });
+  } else if(pctMode){
+    rows=rows.filter(r=>bestQualifyingTrivia(r,filters.triviaMinPct)!=null);
+  }
   if(q) rows=rows.filter(r=>{
     const g=grantedData[r.key];
     const name=g?((g.first_name||'')+' '+(g.last_name||'')).toLowerCase():'';
@@ -542,6 +566,16 @@ function renderCandidates(){
       return {...r,_dist:dist};
     }).filter(r=>r._dist!=null&&r._dist<=geoFilter.radius)
       .sort((a,b)=>a._dist-b._dist);
+  } else if(testMode){
+    // One test chosen: rank candidates by that test's percentile, highest first.
+    rows.sort((a,b)=>(b.triviaPcts[filters.triviaTest]??-1)-(a.triviaPcts[filters.triviaTest]??-1));
+  } else if(pctMode){
+    // No single test chosen, just a percentile floor: rank by each
+    // candidate's best qualifying test, highest first.
+    rows.sort((a,b)=>{
+      const ab=bestQualifyingTrivia(a,filters.triviaMinPct),bb=bestQualifyingTrivia(b,filters.triviaMinPct);
+      return (bb?bb.pct:-1)-(ab?ab.pct:-1);
+    });
   } else {
     rows.sort((a,b)=>{
       let av,bv;
