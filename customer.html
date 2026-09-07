@@ -182,6 +182,13 @@ tr:hover td{background:var(--surface2);}
         <input type="range" id="triviaMinPct" min="0" max="100" value="0" step="5" oninput="onTriviaMinPct(this.value)" style="width:100px;accent-color:var(--accent)">
         <span id="triviaMinPctVal" style="font-size:11px;color:var(--muted);white-space:nowrap;">0th pctl+</span>
       </div>
+      <div class="filter-group">
+        <span class="filter-label">Quality Signals</span>
+        <div class="chip-row">
+          <span class="chip" id="chipVetted" onclick="toggleFlag('furtherVetted')">&#10003; Further Vetted</span>
+          <span class="chip" id="chipWorkHistory" onclick="toggleFlag('hasWorkHistory')">&#10003; Work History on File</span>
+        </div>
+      </div>
       <button class="tb-btn" id="clearFiltersBtn" style="border:1.5px solid var(--border);background:transparent;color:var(--muted);display:none" onclick="clearAllFilters()">&#x2715; Clear Filters</button>
     </div>
     <div class="table-wrap">
@@ -267,7 +274,7 @@ let directory=[];      // one row per Yes/Maybe candidate, keyed by candidate_ke
 let myRequests={};     // candidate_key -> row from my_candidate_requests
 let grantedData={};    // candidate_key -> full PII from get_granted_candidate()
 let lastRenderedRows=[];
-let filters={ certs:new Set(), excCats:new Set(), triviaTest:'', triviaMinPct:0 };
+let filters={ certs:new Set(), excCats:new Set(), triviaTest:'', triviaMinPct:0, furtherVetted:false, hasWorkHistory:false };
 
 const CERT_COLS  = ['Trade Certifications or Licenses','Trade Certifications or Licenses_1','Trade Certifications or Licenses_2','Trade Certifications or Licenses_3','Trade Certifications or Licenses_4','Trade Certifications or Licenses_5','Trade Certifications or Licenses_6','Trade Certifications or Licenses_7','Trade Certifications or Licenses_8','Trade Certifications or Licenses_9','Trade Certifications or Licenses_10','Trade Certifications or Licenses_11','Trade Certifications or Licenses_12','Trade Certifications or Licenses_13','Trade Certifications or Licenses_14','Trade Certifications or Licenses_15'];
 const CERT_NAMES = ['CDL','HEO Cert','Journeyman Electrician','Master Electrician','NEC Cert','CCM','PMP','CCO','EPA 608 Cert','HVAC Excellence Cert','Journeyman Plumber Lic.','Master Plumber Lic.','CW','CWI','CLC','MCAA'];
@@ -474,6 +481,7 @@ async function loadData(){
       certs, excScore: excByKey[key]?excByKey[key].total:null,
       triviaPcts,
       hopeful_job: fu.hopeful_job||'', pay_min: fu.pay_min, pay_max: fu.pay_max,
+      furtherVetted: !!fu.further_vetted, hasWorkHistory: !!fu.has_work_history,
       request: myRequests[key] || {request_status:'none'},
     };
   });
@@ -535,12 +543,18 @@ function onTriviaMinPct(val){
   document.getElementById('triviaMinPctVal').textContent=val+'th pctl+';
   updateClearBtn();renderCandidates();
 }
+function toggleFlag(flag){
+  filters[flag]=!filters[flag];
+  const chipId=flag==='furtherVetted'?'chipVetted':'chipWorkHistory';
+  document.getElementById(chipId).classList.toggle('active',filters[flag]);
+  updateClearBtn();renderCandidates();
+}
 function updateClearBtn(){
-  const active=filters.excCats.size||filters.certs.size||filters.triviaTest||filters.triviaMinPct>0;
+  const active=filters.excCats.size||filters.certs.size||filters.triviaTest||filters.triviaMinPct>0||filters.furtherVetted||filters.hasWorkHistory;
   document.getElementById('clearFiltersBtn').style.display=active?'inline-block':'none';
 }
 function clearAllFilters(){
-  filters={certs:new Set(),excCats:new Set(),triviaTest:'',triviaMinPct:0};
+  filters={certs:new Set(),excCats:new Set(),triviaTest:'',triviaMinPct:0,furtherVetted:false,hasWorkHistory:false};
   document.querySelectorAll('.chip').forEach(el=>el.classList.remove('active'));
   document.getElementById('triviaTestSelect').value='';
   document.getElementById('triviaMinPct').value=0;
@@ -585,6 +599,8 @@ function renderCandidates(){
   const testMode=!!filters.triviaTest;       // one specific test chosen
   const pctMode=filters.triviaMinPct>0;      // a percentile floor is set
 
+  if(filters.furtherVetted) rows=rows.filter(r=>r.furtherVetted);
+  if(filters.hasWorkHistory) rows=rows.filter(r=>r.hasWorkHistory);
   if(filters.excCats.size) rows=rows.filter(r=>filters.excCats.has(excCategory(r.excScore)));
   if(filters.certs.size) rows=rows.filter(r=>r.certs.some(c=>filters.certs.has(c)));
   if(testMode){
@@ -640,7 +656,9 @@ function renderCandidates(){
     const certDisplay=r.certs.length?r.certs.slice(0,2).join(', ')+(r.certs.length>2?` +${r.certs.length-2}`:''):'—';
     const distTd=geoFilter.active?(r._dist!=null?`<td><span class="dist-badge">${r._dist.toFixed(1)} mi</span></td>`:'<td><span class="dist-badge">—</span></td>'):'';
     const payStr=payRangeStr(r);
-    const candidateTd=`<td><span style="color:var(--muted);font-style:italic;">&#128274; Contact hidden</span></td>`;
+    const flagBadges=(r.furtherVetted?'<span class="cert-tag" title="Further vetted by BTW staff" style="background:rgba(26,127,55,.15);color:var(--green)">&#10003; Vetted</span>':'')
+      +(r.hasWorkHistory?'<span class="cert-tag" title="Work history on file" style="background:rgba(88,166,255,.15);color:var(--blue)">&#10003; Work History</span>':'');
+    const candidateTd=`<td><span style="color:var(--muted);font-style:italic;">&#128274; Contact hidden</span>${flagBadges?'<br>'+flagBadges:''}</td>`;
     let accessTd;
     if(req.request_status==='requested'){
       accessTd=`<td><span style="color:var(--amber);font-size:11px;font-weight:700;">Requested — pending</span></td>`;
