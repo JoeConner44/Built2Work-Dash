@@ -59,9 +59,6 @@ tr:hover td{background:var(--surface2);}
 .score-badge{display:inline-block;font-family:'Oswald',sans-serif;font-size:12px;font-weight:700;padding:2px 8px;border-radius:3px;background:rgba(206,14,45,.2);color:#ce0e2d;min-width:34px;text-align:center;}
 .score-badge.hi{background:rgba(63,185,80,.2);color:var(--green);}
 .score-badge.dnc{background:rgba(139,148,158,.15);color:var(--muted);}
-.ip-yes{color:var(--green);font-weight:700;}
-.ip-maybe{color:var(--amber);font-weight:700;}
-.ip-no{color:#f85149;}
 .status-sel{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;padding:3px 20px 3px 8px;border-radius:3px;border:none;cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%2357606a'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 5px center;}
 .s-nc{background:rgba(139,148,158,.2);color:#57606a;}
 .s-co{background:rgba(9,105,218,.12);color:#0969da;}
@@ -85,9 +82,6 @@ tr:hover td{background:var(--surface2);}
 .det-item{background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px 12px;}
 .det-item-label{font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:4px;}
 .det-item-val{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;color:var(--text);}
-.det-item-val.big{font-size:28px;font-weight:900;}
-.det-item-val.accent{color:var(--accent);}
-.det-item-val.green{color:var(--green);}
 .cert-tag{display:inline-block;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;background:rgba(88,166,255,.15);color:var(--blue);padding:3px 9px;border-radius:3px;margin:2px;}
 @media(max-width:600px){.tb-search{width:100%;}.table-wrap{padding:0 10px 20px;}.det-grid,.det-grid.three{grid-template-columns:1fr 1fr;}}
 
@@ -100,7 +94,6 @@ tr:hover td{background:var(--surface2);}
 .star-tier:hover{animation:wiggle .5s ease;}
 .tier-badge{display:inline-block;cursor:default;}
 .tier-badge:hover{animation:bump .3s ease;}
-
 
 /* ── GEO RADIUS FILTER ── */
 .geo-bar{display:flex;align-items:center;gap:8px;padding:10px 20px;border-bottom:1px solid var(--border);background:var(--bg);flex-wrap:wrap;}
@@ -119,6 +112,14 @@ tr:hover td{background:var(--surface2);}
 .geo-status-txt{font-family:'Barlow Condensed',sans-serif;font-size:11px;color:var(--green);}
 .dist-badge{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;color:var(--muted);}
 
+/* ── CANDIDATE FILTER BAR (certs / EXC category / trivia) ── */
+.filter-bar{display:flex;align-items:center;gap:18px;padding:10px 20px;border-bottom:1px solid var(--border);flex-wrap:wrap;background:var(--surface);}
+.filter-group{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.filter-label{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);white-space:nowrap;}
+.chip-row{display:flex;gap:6px;flex-wrap:wrap;}
+.chip{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:.5px;padding:4px 10px;border:1.5px solid var(--border);border-radius:12px;cursor:pointer;color:var(--muted);background:var(--bg);white-space:nowrap;transition:all .15s;}
+.chip:hover{border-color:var(--accent);color:var(--accent);}
+.chip.active{background:var(--accent);border-color:var(--accent);color:#fff;}
 </style>
 </head>
 <body>
@@ -136,13 +137,7 @@ tr:hover td{background:var(--surface2);}
     </div>
   </header>
   <div class="toolbar">
-    <input class="tb-search" id="searchBox" placeholder="Search name, phone, city, certs, job&hellip;" oninput="renderCandidates()">
-    <select class="tb-select" id="statusFilter" onchange="renderCandidates()">
-      <option value="">All Statuses</option>
-      <option>Not Contacted</option><option>Contacted</option>
-      <option>Interviewed</option><option>Offered</option>
-      <option>Hired</option><option>Rejected</option>
-    </select>
+    <input class="tb-search" id="searchBox" placeholder="Search city, hopeful job, certs&hellip;" oninput="renderCandidates()">
     <span class="tb-count" id="countLabel"></span>
     <button class="tb-btn tb-btn-green" onclick="exportExcel()">&#8681; Excel</button>
   </div>
@@ -159,19 +154,37 @@ tr:hover td{background:var(--surface2);}
     <button class="geo-clear" id="cGeoClear" onclick="cClearGeo()" style="display:none">&#x2715; Clear</button>
     <span class="geo-status-txt" id="cGeoStatus"></span>
   </div>
+  <!-- Candidate filters: trade certs / EXC category / trivia percentile -->
+  <div class="filter-bar" id="filterBar">
+    <div class="filter-group">
+      <span class="filter-label">EXC Category</span>
+      <div class="chip-row" id="excChips"></div>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Trade Certs</span>
+      <div class="chip-row" id="certChips"></div>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Trivia</span>
+      <select class="tb-select" id="triviaTestSelect" onchange="onTriviaTestChange()"><option value="">Any test</option></select>
+      <input type="range" id="triviaMinPct" min="0" max="100" value="0" step="5" oninput="onTriviaMinPct(this.value)" style="width:100px;accent-color:var(--accent)">
+      <span id="triviaMinPctVal" style="font-size:11px;color:var(--muted);white-space:nowrap;">0th pctl+</span>
+    </div>
+    <button class="tb-btn" id="clearFiltersBtn" style="border:1.5px solid var(--border);background:transparent;color:var(--muted);display:none" onclick="clearAllFilters()">&#x2715; Clear Filters</button>
+  </div>
   <div class="table-wrap">
     <table>
       <thead><tr>
         <th id="distColHead" style="display:none">Distance</th>
         <th onclick="sortBy('hopeful')">Hopeful Job &#8597;</th>
-        <th onclick="sortBy('name')">Name &#8597;</th>
+        <th>Pay Range</th>
+        <th>Candidate</th>
         <th onclick="sortBy('city')">City &#8597;</th>
         <th onclick="sortBy('state')">State &#8597;</th>
-        <th>Phone</th><th>Email</th>
         <th onclick="sortBy('exc')">EXC &#8597;</th>
+        <th>Trivia Percentile</th>
         <th>Certifications</th>
-        <th>Work History</th>
-        <th onclick="sortBy('status')">Status &#8597;</th>
+        <th>Access</th>
       </tr></thead>
       <tbody id="tbody"></tbody>
     </table>
@@ -198,10 +211,22 @@ tr:hover td{background:var(--surface2);}
 
 // SUPABASE_URL/SUPABASE_ANON, the `sb` client, MAPBOX_TOKEN, normalizePhone(),
 // esc()/jsAttr() and validateUploadFile() live in shared.js (loaded first).
+//
+// This page browses the FULL Yes/Maybe candidate pool (not just candidates
+// BTW staff manually assigned) through masked, non-identifying views —
+// candidate_directory_web/_exc/_trivia/_followup and my_candidate_requests
+// (see supabase-followup.sql). Nothing here ever receives a candidate's
+// name/phone/email/street address until request_candidate_access() has been
+// approved by staff and get_granted_candidate() is called for that specific
+// candidate — masking is enforced server-side, not just by this page hiding
+// fields client-side.
 let geoFilter = { active:false, lat:null, lng:null, radius:25, address:'' };
-
-let myCompany=null, assignments=[], webData={}, excData={}, triviaData={};
-let sortState={col:'name',dir:1};
+let myCompany=null, sortState={col:'city',dir:1};
+let directory=[];      // one row per Yes/Maybe candidate, keyed by candidate_key
+let myRequests={};     // candidate_key -> row from my_candidate_requests
+let grantedData={};    // candidate_key -> full PII from get_granted_candidate()
+let lastRenderedRows=[];
+let filters={ certs:new Set(), excCats:new Set(), triviaTest:'', triviaMinPct:0 };
 
 const CERT_COLS  = ['Trade Certifications or Licenses','Trade Certifications or Licenses_1','Trade Certifications or Licenses_2','Trade Certifications or Licenses_3','Trade Certifications or Licenses_4','Trade Certifications or Licenses_5','Trade Certifications or Licenses_6','Trade Certifications or Licenses_7','Trade Certifications or Licenses_8','Trade Certifications or Licenses_9','Trade Certifications or Licenses_10','Trade Certifications or Licenses_11','Trade Certifications or Licenses_12','Trade Certifications or Licenses_13','Trade Certifications or Licenses_14','Trade Certifications or Licenses_15'];
 const CERT_NAMES = ['CDL','HEO Cert','Journeyman Electrician','Master Electrician','NEC Cert','CCM','PMP','CCO','EPA 608 Cert','HVAC Excellence Cert','Journeyman Plumber Lic.','Master Plumber Lic.','CW','CWI','CLC','MCAA'];
@@ -218,6 +243,47 @@ const TRIVIA_COLS = {
 };
 const STATUS_MAP = {'Not Contacted':'s-nc','Contacted':'s-co','Interviewed':'s-in','Offered':'s-of','Hired':'s-hi','Rejected':'s-re'};
 const STATUSES   = ['Not Contacted','Contacted','Interviewed','Offered','Hired','Rejected'];
+const EXC_CATEGORIES = ['Star','Tier 1','Tier 2','Tier 3','Below Benchmark'];
+
+function excCategory(score){
+  if(score==null||isNaN(score)) return null;
+  if(score>=70) return 'Star';
+  if(score>=60) return 'Tier 1';
+  if(score>=50) return 'Tier 2';
+  if(score>=40) return 'Tier 3';
+  return 'Below Benchmark';
+}
+function getOrdinalSuffix(n){
+  const v=n%100;
+  if(v>=11&&v<=13) return 'th';
+  switch(n%10){case 1:return 'st';case 2:return 'nd';case 3:return 'rd';default:return 'th';}
+}
+// { [testName]: Map(candidate_key -> percentile 0-100) }, each candidate's
+// percentile computed against everyone who took that specific trade test.
+function computeTriviaPercentiles(winRows){
+  const byTest={};
+  Object.entries(TRIVIA_COLS).forEach(([name,col])=>{
+    const scored=winRows.map(r=>{
+      const v=parseFloat(r[col]);
+      return (r.candidate_key&&!isNaN(v))?{key:r.candidate_key,score:v}:null;
+    }).filter(Boolean);
+    const sorted=scored.map(s=>s.score).sort((a,b)=>a-b);
+    const n=sorted.length;
+    const map=new Map();
+    scored.forEach(({key,score})=>{
+      let lo=0,hi=n;
+      while(lo<hi){const mid=(lo+hi)>>1; if(sorted[mid]<score) lo=mid+1; else hi=mid;}
+      const below=lo;
+      lo=0;hi=n;
+      while(lo<hi){const mid=(lo+hi)>>1; if(sorted[mid]<=score) lo=mid+1; else hi=mid;}
+      const tied=lo-below;
+      const pct=n>1?Math.round(((below+0.5*tied)/n)*100):100;
+      if(!map.has(key)||map.get(key)<pct) map.set(key,pct);
+    });
+    byTest[name]=map;
+  });
+  return byTest;
+}
 
 function excTier(score){
   const w=(lbl,badge,tipText,star=false)=>
@@ -237,6 +303,14 @@ function excTier(score){
   if(score>=40)
     return w('background:rgba(240,165,0,.2);color:#f0a500','Tier 3','This candidate was average or slightly worse than average on the excavator simulator but could have potential with training.');
   return w('background:rgba(248,81,73,.15);color:#f85149','Below Benchmark','This candidate performed poorly on the excavator simulator.');
+}
+function excTierDesc(score){
+  if(score==null||isNaN(score)) return 'This candidate did not attempt an excavator simulation.';
+  if(score>=70) return 'A star denotes that this candidate excelled and differentiated themselves on the excavator simulation.';
+  if(score>=60) return 'This candidate did very well on the excavator simulator.';
+  if(score>=50) return 'This candidate was average or slightly better than average on the excavator simulator.';
+  if(score>=40) return 'This candidate was average or slightly worse than average on the excavator simulator but could have potential with training.';
+  return 'This candidate performed poorly on the excavator simulator.';
 }
 
 function showTip(e,el){
@@ -259,9 +333,6 @@ function hideTip(){
   const tip=document.getElementById('floatTip');
   if(tip)tip.style.display='none';
 }
-
-// normalizePhone() lives in shared.js
-function fmtDate(str){if(!str)return '—';return new Date(str).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});}
 
 window.addEventListener('DOMContentLoaded',async()=>{
   document.getElementById('loginPassword').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
@@ -307,126 +378,240 @@ async function showApp(){
 
 async function doLogout(){await sb.auth.signOut();location.reload();}
 
-async function loadData(){
-  const {data:asgn}=await sb.from('candidate_assignments')
-    .select('*').eq('company_id',myCompany.id).order('updated_at',{ascending:false});
-  assignments=asgn||[];
-  const phones=assignments.map(a=>a.phone);
-  if(!phones.length){renderCandidates();return;}
-  const webCols = '"Mobile Phone","First Name","Last Name","DOB","Street Address","City","State","Email Address","Gender","Job Status","Interested in Construction Jobs","What industry do you work in?","What industry do you work in","lat","lng","Trade Certifications or Licenses","Trade Certifications or Licenses_1","Trade Certifications or Licenses_2","Trade Certifications or Licenses_3","Trade Certifications or Licenses_4","Trade Certifications or Licenses_5","Trade Certifications or Licenses_6","Trade Certifications or Licenses_7","Trade Certifications or Licenses_8","Trade Certifications or Licenses_9","Trade Certifications or Licenses_10","Trade Certifications or Licenses_11","Trade Certifications or Licenses_12","Trade Certifications or Licenses_13","Trade Certifications or Licenses_14","Trade Certifications or Licenses_15"';
-  // Build a Set of normalized phones for fast lookup
-  const phoneSet = new Set(phones);
+async function fetchAllRows(table,cols){
+  const PAGE=1000;
+  const {count,error:cErr}=await sb.from(table).select(cols,{count:'exact',head:true});
+  if(cErr) throw cErr;
+  if(!count) return [];
+  const pages=Math.ceil(count/PAGE);
+  const results=await Promise.all(Array.from({length:pages},(_,i)=>sb.from(table).select(cols).range(i*PAGE,(i+1)*PAGE-1)));
+  const err=results.find(r=>r.error);
+  if(err) throw err.error;
+  return results.flatMap(r=>r.data||[]);
+}
 
-  // Fetch all data for this company's assigned phones
-  // We can't use .in() directly because stored phone formats vary (raw vs normalized)
-  // Instead fetch in chunks with ilike not viable — use paginated full fetch then filter
-  async function fetchFiltered(table, cols){
-    const PAGE=1000;
-    const {count} = await sb.from(table).select(cols,{count:'exact',head:true});
-    if(!count) return [];
-    const pages = Math.ceil(count/PAGE);
-    const results = await Promise.all(
-      Array.from({length:pages},(_,i)=>sb.from(table).select(cols).range(i*PAGE,(i+1)*PAGE-1))
-    );
-    return results.flatMap(r=>r.data||[]);
+async function loadData(){
+  let webRows=[],excRows=[],winRows=[],fuRows=[],reqRows=[];
+  try{
+    [webRows,excRows,winRows,fuRows,reqRows]=await Promise.all([
+      fetchAllRows('candidate_directory_web','*'),
+      fetchAllRows('candidate_directory_exc','*'),
+      fetchAllRows('candidate_directory_trivia','*'),
+      fetchAllRows('candidate_directory_followup','*'),
+      sb.from('my_candidate_requests').select('*').then(r=>{ if(r.error) throw r.error; return r.data||[]; }),
+    ]);
+  }catch(e){
+    alert('Error loading candidates: '+e.message+'\n\nHas supabase-followup.sql been run on this project yet?');
+    return;
   }
 
-  const [webAll, excAll, winAll] = await Promise.all([
-    fetchFiltered('web_registration', webCols),
-    fetchFiltered('exc_truck_loading', '"Login Code","Total Score","Safety Score","Productivity Score"'),
-    fetchFiltered('windows_trivia', '"Mobile Phone","QR Code Scan","Trivia Auto Mechanic Score","Trivia Civil Construction Score","Trivia Electrical Score","Trivia Plumbing Score","Trivia Welding Score","Trivia Construction Labor Score","Trivia HVAC Score","Trivia Warehouse Score","Trivia Heavy Equipment Technician Score"'),
-  ]);
+  myRequests={};
+  reqRows.forEach(r=>{ myRequests[r.candidate_key]=r; });
 
-  // Filter to only assigned phones using normalized matching
-  const webRes = { data: webAll.filter(r=>phoneSet.has(normalizePhone(r['Mobile Phone']||''))) };
-  const excRes = { data: excAll.filter(r=>phoneSet.has(normalizePhone(r['Login Code']||''))) };
-  const winRes = { data: winAll.filter(r=>phoneSet.has(normalizePhone(r['Mobile Phone']||r['QR Code Scan']||''))) };
-  webData={};
-  (webRes.data||[]).forEach(r=>{const p=normalizePhone(r['Mobile Phone']||'');if(p)webData[p]=r;});
-  excData={};
-  (excRes.data||[]).forEach(r=>{
-    const p=normalizePhone(r['Login Code']||'');if(!p)return;
+  const excByKey={};
+  excRows.forEach(r=>{
     const s=parseFloat(r['Total Score']);
-    if(!excData[p]||(!isNaN(s)&&s>(excData[p].total??-1)))
-      excData[p]={total:isNaN(s)?null:s,safety:parseFloat(r['Safety Score']),prod:parseFloat(r['Productivity Score'])};
+    const cur=excByKey[r.candidate_key];
+    if(!cur||(!isNaN(s)&&s>(cur.total??-1)))
+      excByKey[r.candidate_key]={total:isNaN(s)?null:s};
   });
-  triviaData={};
-  (winRes.data||[]).forEach(r=>{
-    const p=normalizePhone(r['Mobile Phone']||r['QR Code Scan']||'');if(!p)return;
-    if(!triviaData[p])triviaData[p]={};
-    Object.entries(TRIVIA_COLS).forEach(([name,col])=>{const v=parseFloat(r[col]);if(!isNaN(v))triviaData[p][name]=v;});
+  const triviaPctMaps=computeTriviaPercentiles(winRows);
+  const fuByKey={};
+  fuRows.forEach(r=>{ fuByKey[r.candidate_key]=r; });
+
+  directory=webRows.map(w=>{
+    const key=w.candidate_key;
+    const certs=CERT_NAMES.filter((_,i)=>(w[CERT_COLS[i]]||'').trim()==='Yes');
+    const triviaPcts={};
+    Object.keys(TRIVIA_COLS).forEach(name=>{
+      const m=triviaPctMaps[name],p=m&&m.get(key);
+      if(p!=null) triviaPcts[name]=p;
+    });
+    const fu=fuByKey[key]||{};
+    return {
+      key, city:w.city||'', state:w.state||'', lat:w.lat, lng:w.lng,
+      certs, excScore: excByKey[key]?excByKey[key].total:null,
+      triviaPcts,
+      hopeful_job: fu.hopeful_job||'', pay_min: fu.pay_min, pay_max: fu.pay_max,
+      request: myRequests[key] || {request_status:'none'},
+    };
   });
+
+  // Fetch full contact info for anything already granted.
+  const grantedKeys=directory.filter(d=>d.request.request_status==='granted').map(d=>d.key);
+  grantedData={};
+  await Promise.all(grantedKeys.map(async key=>{
+    const {data,error}=await sb.rpc('get_granted_candidate',{p_candidate_key:key});
+    if(!error && data && data.length) grantedData[key]=data[0];
+  }));
+
   document.getElementById('lastUpdate').textContent='Updated '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  buildFilterUI();
   renderCandidates();
+}
+
+function buildFilterUI(){
+  const excWrap=document.getElementById('excChips');
+  if(excWrap && !excWrap.dataset.built){
+    excWrap.innerHTML=EXC_CATEGORIES.map(c=>`<span class="chip" data-cat="${esc(c)}" onclick="toggleExcCat('${jsAttr(c)}')">${esc(c)}</span>`).join('');
+    excWrap.dataset.built='1';
+  }
+  const certWrap=document.getElementById('certChips');
+  if(certWrap && !certWrap.dataset.built){
+    const present=new Set();
+    directory.forEach(d=>d.certs.forEach(c=>present.add(c)));
+    const list=CERT_NAMES.filter(c=>present.has(c));
+    certWrap.innerHTML=list.length
+      ? list.map(c=>`<span class="chip" data-cert="${esc(c)}" onclick="toggleCert('${jsAttr(c)}')">${esc(c)}</span>`).join('')
+      : '<span style="font-size:11px;color:var(--muted);font-style:italic">None on file</span>';
+    certWrap.dataset.built='1';
+  }
+  const testSel=document.getElementById('triviaTestSelect');
+  if(testSel && testSel.options.length<=1){
+    Object.keys(TRIVIA_COLS).forEach(name=>{
+      const o=document.createElement('option');o.value=name;o.textContent=name;testSel.appendChild(o);
+    });
+  }
+}
+function toggleExcCat(cat){
+  if(filters.excCats.has(cat)) filters.excCats.delete(cat); else filters.excCats.add(cat);
+  document.querySelectorAll('#excChips .chip').forEach(el=>el.classList.toggle('active', filters.excCats.has(el.dataset.cat)));
+  updateClearBtn();renderCandidates();
+}
+function toggleCert(cert){
+  if(filters.certs.has(cert)) filters.certs.delete(cert); else filters.certs.add(cert);
+  document.querySelectorAll('#certChips .chip').forEach(el=>el.classList.toggle('active', filters.certs.has(el.dataset.cert)));
+  updateClearBtn();renderCandidates();
+}
+function onTriviaTestChange(){
+  filters.triviaTest=document.getElementById('triviaTestSelect').value;
+  updateClearBtn();renderCandidates();
+}
+function onTriviaMinPct(val){
+  filters.triviaMinPct=parseInt(val);
+  document.getElementById('triviaMinPctVal').textContent=val+'th pctl+';
+  updateClearBtn();renderCandidates();
+}
+function updateClearBtn(){
+  const active=filters.excCats.size||filters.certs.size||filters.triviaTest||filters.triviaMinPct>0;
+  document.getElementById('clearFiltersBtn').style.display=active?'inline-block':'none';
+}
+function clearAllFilters(){
+  filters={certs:new Set(),excCats:new Set(),triviaTest:'',triviaMinPct:0};
+  document.querySelectorAll('.chip').forEach(el=>el.classList.remove('active'));
+  document.getElementById('triviaTestSelect').value='';
+  document.getElementById('triviaMinPct').value=0;
+  document.getElementById('triviaMinPctVal').textContent='0th pctl+';
+  updateClearBtn();renderCandidates();
 }
 
 function sortBy(col){sortState.dir=sortState.col===col?-sortState.dir:1;sortState.col=col;renderCandidates();}
 
+function payRangeStr(r){
+  return (r.pay_min!=null||r.pay_max!=null) ? ('$'+(r.pay_min??'?')+'–$'+(r.pay_max??'?')) : '—';
+}
+function triviaCellStr(r){
+  const entries=Object.entries(r.triviaPcts);
+  if(!entries.length) return '—';
+  return entries.map(([nm,p])=>nm+': '+p+getOrdinalSuffix(p)+' pctl').join(', ');
+}
+
 function renderCandidates(){
   const q=document.getElementById('searchBox').value.toLowerCase().trim();
-  const status=document.getElementById('statusFilter').value;
-  let rows=assignments.map(a=>{
-    const w=webData[a.phone]||{},e=excData[a.phone]||{},t=triviaData[a.phone]||{};
-    const name=((w['First Name']||'')+' '+(w['Last Name']||'')).trim()||('Phone: '+a.phone);
-    const certs=CERT_NAMES.filter((_,i)=>(w[CERT_COLS[i]]||'').trim()==='Yes');
-    return {...a,name,_w:w,_e:e,_t:t,certs};
+  let rows=directory.slice();
+
+  if(filters.excCats.size) rows=rows.filter(r=>filters.excCats.has(excCategory(r.excScore)));
+  if(filters.certs.size) rows=rows.filter(r=>r.certs.some(c=>filters.certs.has(c)));
+  if(filters.triviaTest) rows=rows.filter(r=>{
+    const p=r.triviaPcts[filters.triviaTest];
+    return p!=null && p>=filters.triviaMinPct;
   });
-  if(status)rows=rows.filter(r=>r.status===status);
-  if(q)rows=rows.filter(r=>{
-    const w=r._w;
-    return r.name.toLowerCase().includes(q)||r.phone.includes(q)||
-      (w['Email Address']||'').toLowerCase().includes(q)||
-      (w['City']||'').toLowerCase().includes(q)||(w['State']||'').toLowerCase().includes(q)||
-      (r.hopeful_job||'').toLowerCase().includes(q)||(r.current_job||'').toLowerCase().includes(q)||
+  if(q) rows=rows.filter(r=>{
+    const g=grantedData[r.key];
+    const name=g?((g.first_name||'')+' '+(g.last_name||'')).toLowerCase():'';
+    return name.includes(q)||
+      (r.city||'').toLowerCase().includes(q)||(r.state||'').toLowerCase().includes(q)||
+      (r.hopeful_job||'').toLowerCase().includes(q)||
       r.certs.some(c=>c.toLowerCase().includes(q));
   });
+
   if(geoFilter.active&&geoFilter.lat&&geoFilter.lng){
     rows=rows.map(r=>{
-      const _wlat = webData[r.phone]?.lat;
-      const _wlng = webData[r.phone]?.lng;
-      const lat = (_wlat !== null && _wlat !== undefined && !isNaN(parseFloat(_wlat))) ? parseFloat(_wlat) : null;
-      const lng = (_wlng !== null && _wlng !== undefined && !isNaN(parseFloat(_wlng))) ? parseFloat(_wlng) : null;
-      return{...r,_dist:(lat!==null&&lng!==null)?haversineDistance(geoFilter.lat,geoFilter.lng,lat,lng):null};
+      const lat=parseFloat(r.lat),lng=parseFloat(r.lng);
+      const dist=(!isNaN(lat)&&!isNaN(lng))?haversineDistance(geoFilter.lat,geoFilter.lng,lat,lng):null;
+      return {...r,_dist:dist};
     }).filter(r=>r._dist!=null&&r._dist<=geoFilter.radius)
       .sort((a,b)=>a._dist-b._dist);
   } else {
-      rows.sort((a,b)=>{
-    let av,bv;
-    if(sortState.col==='hopeful'){av=a.hopeful_job||'';bv=b.hopeful_job||'';}
-    else if(sortState.col==='name'){av=a.name;bv=b.name;}
-    else if(sortState.col==='city'){av=a._w['City']||'';bv=b._w['City']||'';}
-    else if(sortState.col==='state'){av=a._w['State']||'';bv=b._w['State']||'';}
-    else if(sortState.col==='exc'){av=a._e.total??-1;bv=b._e.total??-1;}
-    else if(sortState.col==='status'){av=a.status||'';bv=b.status||'';}
-    else{av='';bv='';}
-    if(av<bv)return -1*sortState.dir;if(av>bv)return 1*sortState.dir;return 0;
-  })
-  };
+    rows.sort((a,b)=>{
+      let av,bv;
+      if(sortState.col==='hopeful'){av=a.hopeful_job||'';bv=b.hopeful_job||'';}
+      else if(sortState.col==='state'){av=a.state||'';bv=b.state||'';}
+      else if(sortState.col==='exc'){av=a.excScore??-1;bv=b.excScore??-1;}
+      else {av=a.city||'';bv=b.city||'';}
+      if(av<bv)return -1*sortState.dir;if(av>bv)return 1*sortState.dir;return 0;
+    });
+  }
+
+  lastRenderedRows=rows;
   document.getElementById('countLabel').textContent=rows.length.toLocaleString()+' candidates';
   const tbody=document.getElementById('tbody');
   if(!rows.length){tbody.innerHTML='<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--muted);font-style:italic;">No candidates found.</td></tr>';return;}
+
   tbody.innerHTML=rows.map(r=>{
-    const w=r._w,e=r._e;
-    const excScore=e.total!=null?e.total:null;
-    const excBadge=excTier(excScore);
-    const statusOpts=STATUSES.map(s=>`<option${s===r.status?' selected':''}>${s}</option>`).join('');
-    const sc=STATUS_MAP[r.status]||'s-nc';
+    const req=r.request||{request_status:'none'};
+    const granted=req.request_status==='granted';
+    const g=granted?grantedData[r.key]:null;
+    const excBadge=excTier(r.excScore);
     const certDisplay=r.certs.length?r.certs.slice(0,2).join(', ')+(r.certs.length>2?` +${r.certs.length-2}`:''):'—';
-    const phone=w['Mobile Phone']?String(w['Mobile Phone']).split('.')[0].replace(/[^\d]/g,''):r.phone;
     const distTd=geoFilter.active?(r._dist!=null?`<td><span class="dist-badge">${r._dist.toFixed(1)} mi</span></td>`:'<td><span class="dist-badge">—</span></td>'):'';
+    const payStr=payRangeStr(r);
+
+    let candidateTd,accessTd;
+    if(granted&&g){
+      const name=((g.first_name||'')+' '+(g.last_name||'')).trim()||'Candidate';
+      const rawPhone=g.mobile_phone?String(g.mobile_phone).split('.')[0].replace(/[^\d]/g,''):'';
+      candidateTd=`<td class="td-name" onclick="showDetail('${jsAttr(r.key)}')">${esc(name)}<br><span style="font-size:11px;color:var(--muted);font-weight:400">${esc(rawPhone)}${g.email_address?' &bull; '+esc(g.email_address):''}</span></td>`;
+      const statusOpts=STATUSES.map(s=>`<option${s===g.status?' selected':''}>${s}</option>`).join('');
+      const sc=STATUS_MAP[g.status]||'s-nc';
+      accessTd=`<td><select class="status-sel ${sc}" onchange="updateStatus('${jsAttr(r.key)}',this)">${statusOpts}</select></td>`;
+    } else {
+      candidateTd=`<td><span style="color:var(--muted);font-style:italic;">&#128274; Contact hidden</span></td>`;
+      if(req.request_status==='requested'){
+        accessTd=`<td><span style="color:var(--amber);font-size:11px;font-weight:700;">Requested — pending</span></td>`;
+      } else if(req.request_status==='denied'){
+        accessTd=`<td><span style="color:#f85149;font-size:11px;" title="${esc(req.denial_reason||'')}">Denied</span> <button class="tb-btn" style="border:1.5px solid var(--border);color:var(--muted);font-size:10px;padding:3px 8px;" onclick="requestAccess('${jsAttr(r.key)}')">Request Again</button></td>`;
+      } else {
+        accessTd=`<td><button class="tb-btn tb-btn-green" style="font-size:10px;padding:4px 10px;" onclick="requestAccess('${jsAttr(r.key)}')">Request Contact Info</button></td>`;
+      }
+    }
+
     return `<tr>
-      ${distTd}<td style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--blue);white-space:nowrap">${esc(r.hopeful_job)||'—'}</td>
-      <td class="td-name" onclick="showDetail('${jsAttr(r.phone)}')">${esc(r.name)}</td>
-      <td style="font-family:'Barlow Condensed',sans-serif;white-space:nowrap">${esc(w['City'])||'—'}</td>
-      <td style="font-family:'Barlow Condensed',sans-serif;font-weight:700">${esc(w['State'])||'—'}</td>
-      <td style="color:var(--muted);font-size:11px;white-space:nowrap">${esc(phone)}</td>
-      <td style="color:var(--muted);font-size:11px;max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(w['Email Address'])||'—'}</td>
+      ${distTd}
+      <td style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--blue);white-space:nowrap">${esc(r.hopeful_job)||'—'}</td>
+      <td style="font-size:12px;white-space:nowrap">${payStr}</td>
+      ${candidateTd}
+      <td style="font-family:'Barlow Condensed',sans-serif;white-space:nowrap">${esc(r.city)||'—'}</td>
+      <td style="font-family:'Barlow Condensed',sans-serif;font-weight:700">${esc(r.state)||'—'}</td>
       <td>${excBadge}</td>
+      <td style="font-size:11px;max-width:170px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(triviaCellStr(r))}">${esc(triviaCellStr(r))}</td>
       <td style="font-size:11px;max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(r.certs.join(', '))}">${esc(certDisplay)}</td>
-      <td style="font-size:11px;color:var(--muted);max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(r.work_history)}">${esc(r.work_history)||'—'}</td>
-      <td><select class="status-sel ${sc}" onchange="updateStatus('${jsAttr(r.id)}',this)">${statusOpts}</select></td>
+      ${accessTd}
     </tr>`;
   }).join('');
+}
+
+async function requestAccess(key){
+  const {data,error}=await sb.rpc('request_candidate_access',{p_candidate_key:key});
+  if(error){alert('Error requesting access: '+error.message);return;}
+  const existing=myRequests[key]||{candidate_key:key};
+  existing.request_status=data;
+  existing.requested_at=new Date().toISOString();
+  existing.denial_reason=null;
+  myRequests[key]=existing;
+  const d=directory.find(x=>x.key===key);
+  if(d) d.request=existing;
+  renderCandidates();
 }
 
 // Rejection-reason modal: promptRejectReason() resolves to the typed reason,
@@ -453,84 +638,75 @@ function closeRej(val){
   if(_rejResolve){_rejResolve(val);_rejResolve=null;}
 }
 
-async function updateStatus(id,sel){
-  const a=assignments.find(x=>x.id===id);
-  const prev=a?.status||'Not Contacted';
+async function updateStatus(key,sel){
+  const g=grantedData[key];
+  if(!g){sel.value='Not Contacted';return;}
+  const prev=g.status||'Not Contacted';
   const s=sel.value;
   if(s===prev)return;
   let reason=null;
   if(s==='Rejected'){
-    const w=a?webData[a.phone]:null;
-    const name=w?((w['First Name']||'')+' '+(w['Last Name']||'')).trim():'';
+    const name=((g.first_name||'')+' '+(g.last_name||'')).trim();
     reason=await promptRejectReason(name);
     if(reason===null){sel.value=prev;return;} // cancelled — revert, no write
   }
-  const updates={status:s,rejection_reason:s==='Rejected'?reason:null};
-  const {error}=await sb.from('candidate_assignments').update(updates).eq('id',id);
+  const {error}=await sb.from('candidate_assignments').update({status:s,rejection_reason:s==='Rejected'?reason:null}).eq('id',g.assignment_id);
   if(error){sel.value=prev;sel.className='status-sel '+(STATUS_MAP[prev]||'s-nc');alert('Could not save status: '+error.message);return;}
   sel.className='status-sel '+(STATUS_MAP[s]||'s-nc');
-  if(a){
-    a.status=s;a.rejection_reason=updates.rejection_reason;
-    a.status_changed_at=new Date().toISOString();a.updated_at=a.status_changed_at;
-  }
+  g.status=s;g.rejection_reason=s==='Rejected'?reason:null;
 }
-function showDetail(phone){
-  const a=assignments.find(x=>x.phone===phone)||{};
-  const w=webData[phone]||{},e=excData[phone]||{},t=triviaData[phone]||{};
-  const name=((w['First Name']||'')+' '+(w['Last Name']||'')).trim()||('Phone: '+phone);
-  const certs=CERT_NAMES.filter((_,i)=>(w[CERT_COLS[i]]||'').trim()==='Yes');
-  const rawPhone=w['Mobile Phone']?String(w['Mobile Phone']).split('.')[0].replace(/[^\d]/g,''):phone;
-  const ind=(w['What industry do you work in?']||'').trim();
-  const indOther=(w['What industry do you work in']||'').trim();
-  const industry=ind==='Other'&&indOther?'Other: '+indOther:ind||'—';
-  const empMap={'Currently employed in construction and/or a trade':'In Trades','Currently employed in another industry':'Other Industry','Retired':'Retired','Student':'Student','Unemployed and looking for work':'Unemployed','Other':'Other'};
-  const employment=empMap[w['Job Status']||'']||w['Job Status']||'—';
-  const ji=w['Interested in Construction Jobs']||'—';
+
+function showDetail(key){
+  const req=myRequests[key];
+  if(!req||req.request_status!=='granted')return;
+  const g=grantedData[key],d=directory.find(x=>x.key===key);
+  if(!g||!d)return;
+  const name=((g.first_name||'')+' '+(g.last_name||'')).trim()||'Candidate';
+  const rawPhone=g.mobile_phone?String(g.mobile_phone).split('.')[0].replace(/[^\d]/g,''):'';
   document.getElementById('detName').textContent=name;
-  document.getElementById('detSub').innerHTML=esc(rawPhone)+' &bull; '+(esc(w['Email Address'])||'—')+' &bull; '+esc(w['City'])+' '+esc(w['State']);
+  document.getElementById('detSub').innerHTML=esc(rawPhone)+' &bull; '+(esc(g.email_address)||'—')+' &bull; '+esc(g.city||d.city)+' '+esc(g.state||d.state);
+  const statusCls=STATUS_MAP[g.status]||'s-nc';
+  const statusOpts=STATUSES.map(s=>`<option${s===g.status?' selected':''}>${s}</option>`).join('');
   let html='';
-  const statusCls=STATUS_MAP[a.status]||'s-nc';
-  html+=`<div class="det-section"><div class="det-section-title">Assignment</div>
+  html+=`<div class="det-section"><div class="det-section-title">Status</div>
     <div class="det-grid three">
-      <div class="det-item"><div class="det-item-label">Status</div><div class="det-item-val"><span class="status-sel ${statusCls}" style="background-image:none;padding:3px 8px;cursor:default;">${esc(a.status)||'Not Contacted'}</span>${a.status_changed_at?`<div style="font-size:11px;font-weight:400;color:var(--muted);margin-top:4px;">changed ${timeAgo(a.status_changed_at)}</div>`:''}</div></div>
-      <div class="det-item"><div class="det-item-label">Hopeful Job</div><div class="det-item-val">${esc(a.hopeful_job)||'—'}</div></div>
-      <div class="det-item"><div class="det-item-label">Pay Scale</div><div class="det-item-val">${esc(a.pay_scale)||'—'}</div></div>
-      <div class="det-item"><div class="det-item-label">Current Job</div><div class="det-item-val">${esc(a.current_job)||'—'}</div></div>
+      <div class="det-item"><div class="det-item-label">Hiring Status</div><div class="det-item-val"><select class="status-sel ${statusCls}" onchange="updateStatus('${jsAttr(key)}',this)">${statusOpts}</select></div></div>
+      <div class="det-item"><div class="det-item-label">Hopeful Job</div><div class="det-item-val">${esc(d.hopeful_job)||'—'}</div></div>
+      <div class="det-item"><div class="det-item-label">Pay Range</div><div class="det-item-val">${payRangeStr(d)}</div></div>
     </div>
-    ${a.status==='Rejected'&&a.rejection_reason?`<div class="det-item" style="margin-top:10px;border-color:rgba(248,81,73,.4);"><div class="det-item-label" style="color:#f85149;">Rejection Reason</div><div class="det-item-val" style="font-size:13px;font-weight:400;font-family:'Barlow',sans-serif;white-space:pre-wrap">${esc(a.rejection_reason)}</div></div>`:''}
-    ${a.work_history?`<div class="det-item" style="margin-top:10px;grid-column:span 2"><div class="det-item-label">Work History</div><div class="det-item-val" style="font-size:13px;font-weight:400;font-family:'Barlow',sans-serif;white-space:pre-wrap">${esc(a.work_history)}</div></div>`:''}
-    ${a.file_url?`<div style="margin-top:10px"><a href="${a.file_url}" target="_blank" style="font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;color:var(--blue);text-decoration:none;display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1.5px solid var(--blue);border-radius:4px;">&#128206; View Attachment</a></div>`:''}
+    ${g.status==='Rejected'&&g.rejection_reason?`<div class="det-item" style="margin-top:10px;border-color:rgba(248,81,73,.4);"><div class="det-item-label" style="color:#f85149;">Rejection Reason</div><div class="det-item-val" style="font-size:13px;font-weight:400;font-family:'Barlow',sans-serif;white-space:pre-wrap">${esc(g.rejection_reason)}</div></div>`:''}
   </div>`;
   html+=`<div class="det-section"><div class="det-section-title">Personal Info</div><div class="det-grid">
-    <div class="det-item"><div class="det-item-label">Address</div><div class="det-item-val" style="font-size:13px;font-weight:400;font-family:'Barlow',sans-serif">${esc(w['Street Address'])||'—'}<br>${esc(w['City'])} ${esc(w['State'])}</div></div>
-    <div class="det-item"><div class="det-item-label">Email</div><div class="det-item-val" style="font-size:12px;font-weight:400;font-family:'Barlow',sans-serif;word-break:break-all">${esc(w['Email Address'])||'—'}</div></div>
-    <div class="det-item"><div class="det-item-label">Employment</div><div class="det-item-val" style="font-size:13px">${esc(employment)}</div></div>
-    <div class="det-item"><div class="det-item-label">Industry</div><div class="det-item-val" style="font-size:13px">${esc(industry)}</div></div>
+    <div class="det-item"><div class="det-item-label">Address</div><div class="det-item-val" style="font-size:13px;font-weight:400;font-family:'Barlow',sans-serif">${esc(g.street_address)||'—'}<br>${esc(g.city||d.city)} ${esc(g.state||d.state)}</div></div>
+    <div class="det-item"><div class="det-item-label">Email</div><div class="det-item-val" style="font-size:12px;font-weight:400;font-family:'Barlow',sans-serif;word-break:break-all">${esc(g.email_address)||'—'}</div></div>
   </div></div>`;
-  const excScore=e.total!=null?e.total:null;
   html+=`<div class="det-section"><div class="det-section-title">EXC Simulator</div>
     <div style="padding:10px 0;display:flex;flex-direction:column;gap:10px;">
-      <div style="font-size:16px">${excTier(excScore)}</div>
-      <div style="font-size:12px;color:var(--muted);font-family:'Barlow',sans-serif;line-height:1.5;font-style:italic">${excTierDesc(excScore)}</div>
+      <div style="font-size:16px">${excTier(d.excScore)}</div>
+      <div style="font-size:12px;color:var(--muted);font-family:'Barlow',sans-serif;line-height:1.5;font-style:italic">${excTierDesc(d.excScore)}</div>
     </div>
   </div>`;
+  if(Object.keys(d.triviaPcts).length){
+    html+=`<div class="det-section"><div class="det-section-title">Trivia Percentiles</div>
+      <div style="padding:8px 0">${Object.entries(d.triviaPcts).map(([nm,p])=>`<span class="cert-tag">${esc(nm)}: ${p}${getOrdinalSuffix(p)} pctl</span>`).join('')}</div>
+    </div>`;
+  }
   html+=`<div class="det-section"><div class="det-section-title">Certifications &amp; Licenses</div>
-    <div style="padding:8px 0">${certs.length?certs.map(c=>`<span class="cert-tag">${c}</span>`).join(''):'<span style="color:var(--muted);font-size:13px">None on file</span>'}</div>
+    <div style="padding:8px 0">${d.certs.length?d.certs.map(c=>`<span class="cert-tag">${esc(c)}</span>`).join(''):'<span style="color:var(--muted);font-size:13px">None on file</span>'}</div>
   </div>`;
-  html+=`<div class="det-section"><div class="det-section-title">Files</div>
-    <div id="detFileWrap_${a.id}" style="padding:4px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-      ${a.file_url?`<a href="${esc(a.file_url)}" target="_blank" style="color:var(--blue);font-size:13px">&#128206; View attached file</a>`:'<span style="color:var(--muted);font-size:13px;font-style:italic">No file attached</span>'}
-      <label style="font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;padding:4px 10px;border:1.5px dashed var(--border);border-radius:3px;cursor:pointer;color:var(--muted)">
-        &#8679; Attach File
-        <input type="file" style="display:none" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onchange="uploadDetFile('${jsAttr(a.id)}',this)">
-      </label>
-      <span id="detFileStatus_${a.id}" style="font-size:11px;color:var(--muted);font-family:'Barlow Condensed',sans-serif"></span>
-    </div>
+  html+=`<div class="det-section"><div class="det-section-title">Work History / Resume</div>
+    ${g.work_history?`<div class="det-item" style="margin-bottom:8px;font-size:13px;font-weight:400;font-family:'Barlow',sans-serif;white-space:pre-wrap">${esc(g.work_history)}</div>`:''}
+    ${g.resume_url?`<a href="${esc(g.resume_url)}" target="_blank" style="font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;color:var(--blue);text-decoration:none;display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1.5px solid var(--blue);border-radius:4px;">&#128206; View Resume</a>`:''}
+    ${!g.work_history&&!g.resume_url?'<span style="color:var(--muted);font-size:13px;font-style:italic">Not provided yet.</span>':''}
   </div>`;
   document.getElementById('detBody').innerHTML=html;
   document.getElementById('detOverlay').classList.add('open');
 }
 
+function closeDetail(e){
+  if(e && e.target !== document.getElementById('detOverlay')) return;
+  document.getElementById('detOverlay').classList.remove('open');
+}
 
 // ─── GEO / RADIUS FILTER ──────────────────────────────────────────────────
 function haversineDistance(lat1,lng1,lat2,lng2){
@@ -543,7 +719,7 @@ let cGeoTimer=null;
 // Search-as-you-type needs the Mapbox Search Box API (suggest + retrieve),
 // which is built for interactive autocomplete. The Geocoding forward endpoint
 // (v5 or v6) expects complete queries and returns nothing while a partial
-// address is still being typed \u2014 which looked like the box ignoring input.
+// address is still being typed — which looked like the box ignoring input.
 let cGeoSession=null;
 function cGeoSessionToken(){
   if(!cGeoSession) cGeoSession=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():(Date.now()+'-'+Math.random().toString(16).slice(2));
@@ -555,7 +731,7 @@ function cOnGeoInput(val){
   if(!val||val.length<3){sug.style.display='none';return;}
   cGeoTimer=setTimeout(async()=>{
     if(!MAPBOX_TOKEN){
-      document.getElementById('cGeoStatus').textContent='\u26a0 Mapbox token not set';return;
+      document.getElementById('cGeoStatus').textContent='⚠ Mapbox token not set';return;
     }
     try{
       const params=new URLSearchParams({q:val,country:'US',types:'address,street,place,postcode,locality,neighborhood',limit:'5',session_token:cGeoSessionToken(),access_token:MAPBOX_TOKEN});
@@ -581,12 +757,12 @@ async function cSelectGeo(mapboxId,name){
     const url=`https://api.mapbox.com/search/searchbox/v1/retrieve/${encodeURIComponent(mapboxId)}?${params}`;
     const data=await fetch(url).then(r=>r.json());
     const feat=data.features&&data.features[0];
-    if(!feat){document.getElementById('cGeoStatus').textContent='\u26a0 Could not locate that address';return;}
+    if(!feat){document.getElementById('cGeoStatus').textContent='⚠ Could not locate that address';return;}
     const [lng,lat]=feat.geometry.coordinates;
     geoFilter.lat=lat; geoFilter.lng=lng; geoFilter.address=name;
-    document.getElementById('cGeoStatus').textContent='\uD83D\uDCCD '+name.split(',')[0];
-    cGeoSession=null; // rotate session after a completed suggest\u2192retrieve
-  }catch(e){console.warn(e);document.getElementById('cGeoStatus').textContent='\u26a0 Location lookup failed';}
+    document.getElementById('cGeoStatus').textContent='📍 '+name.split(',')[0];
+    cGeoSession=null; // rotate session after a completed suggest→retrieve
+  }catch(e){console.warn(e);document.getElementById('cGeoStatus').textContent='⚠ Location lookup failed';}
 }
 
 function cOnGeoRadius(val){
@@ -596,7 +772,7 @@ function cOnGeoRadius(val){
 
 function cApplyGeo(){
   if(!geoFilter.lat||!geoFilter.lng){
-    document.getElementById('cGeoStatus').textContent='\u26a0 Select an address first';return;
+    document.getElementById('cGeoStatus').textContent='⚠ Select an address first';return;
   }
   geoFilter.active=true;
   document.getElementById('cGeoClear').style.display='inline';
@@ -626,82 +802,37 @@ document.addEventListener('click',e=>{
   if(sug&&inp&&!inp.contains(e.target)&&!sug.contains(e.target))sug.style.display='none';
 });
 
-
-// ─── EXC TIER DESCRIPTION (used in detail popup) ─────────────────────────
-function excTierDesc(score){
-  if(score==null||isNaN(score)) return 'This candidate did not attempt an excavator simulation.';
-  if(score>=70) return 'A star denotes that this candidate excelled and differentiated themselves on the excavator simulation.';
-  if(score>=60) return 'This candidate did very well on the excavator simulator.';
-  if(score>=50) return 'This candidate was average or slightly better than average on the excavator simulator.';
-  if(score>=40) return 'This candidate was average or slightly worse than average on the excavator simulator but could have potential with training.';
-  return 'This candidate performed poorly on the excavator simulator.';
-}
-
-// ─── INLINE NOTE EDITING IN DETAIL POPUP ─────────────────────────────────
-async function uploadDetFile(id,input){
-  if(!input.files||!input.files[0]) return;
-  const statusEl=document.getElementById('detFileStatus_'+id);
-  if(statusEl){statusEl.style.color='var(--muted)';statusEl.textContent='Uploading\u2026';}
-  const a=assignments.find(x=>x.id===id);
-  const file=input.files[0];
-  const v=validateUploadFile(file);
-  if(!v.ok){ if(statusEl){statusEl.style.color='#f85149';statusEl.textContent=v.error;} input.value=''; return; }
-  const ext=v.ext;
-  const path=`assignments/${a.phone}_${a.company_id}_${Date.now()}.${ext}`;
-  const {error:upErr}=await sb.storage.from('candidate-files').upload(path,file,{upsert:true});
-  if(upErr){
-    if(statusEl){statusEl.style.color='#f85149';statusEl.textContent='Upload failed: '+upErr.message;}
-    return;
-  }
-  const {data:urlData}=sb.storage.from('candidate-files').getPublicUrl(path);
-  const fileUrl=urlData?.publicUrl;
-  await sb.from('candidate_assignments').update({file_url:fileUrl}).eq('id',id);
-  if(a) a.file_url=fileUrl;
-  if(statusEl){
-    statusEl.style.color='var(--green)';
-    statusEl.innerHTML=`\u2713 Uploaded \u2014 <a href="${fileUrl}" target="_blank" style="color:var(--blue)">View</a>`;
-  }
-}
-
 // ─── EXCEL EXPORT ─────────────────────────────────────────────────────────
+// Exports whatever is currently on screen. Masked rows export with their
+// contact fields blank — this page never has that data unless access was
+// granted, so there is nothing to leak here either.
 function exportExcel(){
-  if(typeof XLSX==='undefined'){alert('Loading\u2026');return;}
-  const head=['Name','Phone','Email','Address','City','State','Employment',
-    'EXC Score','EXC Safety','EXC Productivity','Certifications',
-    'Hopeful Job','Pay Scale','Current Job','Work History','Status','File'];
-  const rows=assignments.map(a=>{
-    const w=webData[a.phone]||{};
-    const e=excData[a.phone]||{};
-    const certs=CERT_NAMES.filter((_,i)=>(w[CERT_COLS[i]]||'').trim()==='Yes').join(', ');
-    const name=((w['First Name']||'')+' '+(w['Last Name']||'')).trim()||a.phone;
-    const phone=w['Mobile Phone']?String(w['Mobile Phone']).split('.')[0].replace(/[^\d]/g,''):a.phone;
+  if(typeof XLSX==='undefined'){alert('Loading…');return;}
+  const head=['Hopeful Job','Pay Range','Name','Phone','Email','City','State',
+    'EXC Score','Trivia Percentiles','Certifications','Access Status','Hiring Status'];
+  const rows=lastRenderedRows.map(r=>{
+    const granted=r.request.request_status==='granted';
+    const g=granted?grantedData[r.key]:null;
+    const name=g?((g.first_name||'')+' '+(g.last_name||'')).trim():'(hidden — not requested)';
+    const phone=g&&g.mobile_phone?String(g.mobile_phone).split('.')[0].replace(/[^\d]/g,''):'';
     return [
-      name, phone, w['Email Address']||'', w['Street Address']||'',
-      w['City']||'', w['State']||'',
-      w['Job Status']||'',
-      e.total!=null?e.total.toFixed(0):'DNC',
-      !isNaN(e.safety)?e.safety.toFixed(0):'',
-      !isNaN(e.prod)?e.prod.toFixed(0):'',
-      certs,
-      a.hopeful_job||'', a.pay_scale||'', a.current_job||'',
-      a.work_history||'', a.status||'', a.file_url||''
+      r.hopeful_job||'', payRangeStr(r), name, phone, g?g.email_address||'':'',
+      r.city||'', r.state||'',
+      r.excScore!=null?r.excScore.toFixed(0):'DNC',
+      triviaCellStr(r),
+      r.certs.join(', '),
+      r.request.request_status||'none',
+      g?g.status||'':''
     ];
   });
   const wb=XLSX.utils.book_new();
   const ws=XLSX.utils.aoa_to_sheet([head,...rows]);
-  ws['!cols']=[{wch:22},{wch:14},{wch:28},{wch:24},{wch:14},{wch:8},{wch:18},
-               {wch:10},{wch:10},{wch:12},{wch:36},{wch:20},{wch:14},{wch:20},{wch:28},{wch:16},{wch:40}];
+  ws['!cols']=[{wch:20},{wch:14},{wch:22},{wch:14},{wch:28},{wch:14},{wch:8},
+               {wch:10},{wch:36},{wch:30},{wch:14},{wch:14}];
   ws['!freeze']={xSplit:0,ySplit:1,topLeftCell:'A2',activeCell:'A2',sqref:'A2'};
   XLSX.utils.book_append_sheet(wb,ws,'Candidates');
   XLSX.writeFile(wb,'Candidates_'+myCompany.name.replace(/\s+/g,'_')+'_'+new Date().toISOString().slice(0,10)+'.xlsx');
 }
-
-
-function closeDetail(e){
-  if(e && e.target !== document.getElementById('detOverlay')) return;
-  document.getElementById('detOverlay').classList.remove('open');
-}
-
 </script>
 <div id="floatTip"></div>
 </body>
