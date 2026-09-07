@@ -120,6 +120,12 @@ tr:hover td{background:var(--surface2);}
 .chip{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:.5px;padding:4px 10px;border:1.5px solid var(--border);border-radius:12px;cursor:pointer;color:var(--muted);background:var(--bg);white-space:nowrap;transition:all .15s;}
 .chip:hover{border-color:var(--accent);color:var(--accent);}
 .chip.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+
+/* ── CUSTOMER TAB BAR (Search / Recruiting Pipeline) ── */
+.cust-tab-bar{display:flex;background:#ffffff;border-bottom:1px solid var(--border);padding:0 20px;flex-shrink:0;}
+.cust-tab{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:11px 18px;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;margin-bottom:-1px;}
+.cust-tab.active{border-bottom-color:var(--accent);color:var(--accent);}
+.cust-tab-badge{display:inline-block;background:var(--accent);color:#fff;font-size:10px;font-weight:700;border-radius:9px;padding:1px 7px;margin-left:4px;}
 </style>
 </head>
 <body>
@@ -136,58 +142,93 @@ tr:hover td{background:var(--surface2);}
       <button class="hbtn" onclick="doLogout()">Sign Out</button>
     </div>
   </header>
-  <div class="toolbar">
-    <input class="tb-search" id="searchBox" placeholder="Search city, hopeful job, certs&hellip;" oninput="renderCandidates()">
-    <span class="tb-count" id="countLabel"></span>
-    <button class="tb-btn tb-btn-green" onclick="exportExcel()">&#8681; Excel</button>
+  <div class="cust-tab-bar" id="custTabBar">
+    <button class="cust-tab active" id="tabSearch" onclick="switchCustomerTab('search')">&#128269; Search</button>
+    <button class="cust-tab" id="tabPipeline" onclick="switchCustomerTab('pipeline')">&#128203; Recruiting Pipeline <span id="pipelineBadge" class="cust-tab-badge" style="display:none">0</span></button>
   </div>
-  <!-- Geo radius bar -->
-  <div class="geo-bar" id="geoBar">
-    <span class="geo-bar-label">&#9678; Radius</span>
-    <div class="geo-input-wrap">
-      <input class="geo-inp" id="cGeoInput" placeholder="Enter your business address…" oninput="cOnGeoInput(this.value)" autocomplete="off">
-      <div class="geo-sugg" id="cGeoSugg" style="display:none"></div>
+
+  <div id="searchPanel" style="display:flex;flex-direction:column;">
+    <div class="toolbar">
+      <input class="tb-search" id="searchBox" placeholder="Search city, hopeful job, certs&hellip;" oninput="renderCandidates()">
+      <span class="tb-count" id="countLabel"></span>
+      <button class="tb-btn tb-btn-green" onclick="exportExcel()">&#8681; Excel</button>
     </div>
-    <input type="range" id="cGeoSlider" min="1" max="150" value="25" style="width:100px;accent-color:var(--accent)" oninput="cOnGeoRadius(this.value)">
-    <span class="geo-radius-val" id="cGeoVal">25 mi</span>
-    <button class="geo-apply" onclick="cApplyGeo()">Apply</button>
-    <button class="geo-clear" id="cGeoClear" onclick="cClearGeo()" style="display:none">&#x2715; Clear</button>
-    <span class="geo-status-txt" id="cGeoStatus"></span>
+    <!-- Geo radius bar -->
+    <div class="geo-bar" id="geoBar">
+      <span class="geo-bar-label">&#9678; Radius</span>
+      <div class="geo-input-wrap">
+        <input class="geo-inp" id="cGeoInput" placeholder="Enter your business address…" oninput="cOnGeoInput(this.value)" autocomplete="off">
+        <div class="geo-sugg" id="cGeoSugg" style="display:none"></div>
+      </div>
+      <input type="range" id="cGeoSlider" min="1" max="150" value="25" style="width:100px;accent-color:var(--accent)" oninput="cOnGeoRadius(this.value)">
+      <span class="geo-radius-val" id="cGeoVal">25 mi</span>
+      <button class="geo-apply" onclick="cApplyGeo()">Apply</button>
+      <button class="geo-clear" id="cGeoClear" onclick="cClearGeo()" style="display:none">&#x2715; Clear</button>
+      <span class="geo-status-txt" id="cGeoStatus"></span>
+    </div>
+    <!-- Candidate filters: trade certs / EXC category / trivia percentile -->
+    <div class="filter-bar" id="filterBar">
+      <div class="filter-group">
+        <span class="filter-label">EXC Category</span>
+        <div class="chip-row" id="excChips"></div>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Trade Certs</span>
+        <div class="chip-row" id="certChips"></div>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Trivia</span>
+        <select class="tb-select" id="triviaTestSelect" onchange="onTriviaTestChange()"><option value="">Any test</option></select>
+        <input type="range" id="triviaMinPct" min="0" max="100" value="0" step="5" oninput="onTriviaMinPct(this.value)" style="width:100px;accent-color:var(--accent)">
+        <span id="triviaMinPctVal" style="font-size:11px;color:var(--muted);white-space:nowrap;">0th pctl+</span>
+      </div>
+      <button class="tb-btn" id="clearFiltersBtn" style="border:1.5px solid var(--border);background:transparent;color:var(--muted);display:none" onclick="clearAllFilters()">&#x2715; Clear Filters</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th id="distColHead" style="display:none">Distance</th>
+          <th onclick="sortBy('hopeful')">Hopeful Job &#8597;</th>
+          <th>Pay Range</th>
+          <th>Candidate</th>
+          <th onclick="sortBy('city')">City &#8597;</th>
+          <th onclick="sortBy('state')">State &#8597;</th>
+          <th onclick="sortBy('exc')">EXC &#8597;</th>
+          <th>Trivia Percentile</th>
+          <th>Certifications</th>
+          <th>Access</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
   </div>
-  <!-- Candidate filters: trade certs / EXC category / trivia percentile -->
-  <div class="filter-bar" id="filterBar">
-    <div class="filter-group">
-      <span class="filter-label">EXC Category</span>
-      <div class="chip-row" id="excChips"></div>
+
+  <div id="pipelinePanel" style="display:none;flex-direction:column;">
+    <div class="toolbar">
+      <input class="tb-search" id="pipeSearchBox" placeholder="Search name, phone, city&hellip;" oninput="renderPipeline()">
+      <select class="tb-select" id="pipeStatusFilter" onchange="renderPipeline()">
+        <option value="">All Statuses</option>
+        <option>Not Contacted</option><option>Contacted</option>
+        <option>Interviewed</option><option>Offered</option>
+        <option>Hired</option><option>Rejected</option>
+      </select>
+      <span class="tb-count" id="pipeCountLabel"></span>
     </div>
-    <div class="filter-group">
-      <span class="filter-label">Trade Certs</span>
-      <div class="chip-row" id="certChips"></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Hopeful Job</th>
+          <th>Pay Range</th>
+          <th>Candidate</th>
+          <th>City</th>
+          <th>State</th>
+          <th>EXC</th>
+          <th>Certifications</th>
+          <th>Status</th>
+        </tr></thead>
+        <tbody id="pipeTbody"></tbody>
+      </table>
     </div>
-    <div class="filter-group">
-      <span class="filter-label">Trivia</span>
-      <select class="tb-select" id="triviaTestSelect" onchange="onTriviaTestChange()"><option value="">Any test</option></select>
-      <input type="range" id="triviaMinPct" min="0" max="100" value="0" step="5" oninput="onTriviaMinPct(this.value)" style="width:100px;accent-color:var(--accent)">
-      <span id="triviaMinPctVal" style="font-size:11px;color:var(--muted);white-space:nowrap;">0th pctl+</span>
-    </div>
-    <button class="tb-btn" id="clearFiltersBtn" style="border:1.5px solid var(--border);background:transparent;color:var(--muted);display:none" onclick="clearAllFilters()">&#x2715; Clear Filters</button>
-  </div>
-  <div class="table-wrap">
-    <table>
-      <thead><tr>
-        <th id="distColHead" style="display:none">Distance</th>
-        <th onclick="sortBy('hopeful')">Hopeful Job &#8597;</th>
-        <th>Pay Range</th>
-        <th>Candidate</th>
-        <th onclick="sortBy('city')">City &#8597;</th>
-        <th onclick="sortBy('state')">State &#8597;</th>
-        <th onclick="sortBy('exc')">EXC &#8597;</th>
-        <th>Trivia Percentile</th>
-        <th>Certifications</th>
-        <th>Access</th>
-      </tr></thead>
-      <tbody id="tbody"></tbody>
-    </table>
   </div>
 </div>
 <div class="det-overlay" id="detOverlay" onclick="closeDetail(event)"><div class="det-modal"><div class="det-header"><div><div class="det-name" id="detName"></div><div class="det-sub" id="detSub"></div></div><button class="det-close" onclick="closeDetail()">&#x2715;</button></div><div class="det-body" id="detBody"></div></div></div>
@@ -447,7 +488,9 @@ async function loadData(){
 
   document.getElementById('lastUpdate').textContent='Updated '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
   buildFilterUI();
+  updatePipelineBadge();
   renderCandidates();
+  renderPipeline();
 }
 
 function buildFilterUI(){
@@ -536,7 +579,9 @@ function triviaCellStr(r){
 
 function renderCandidates(){
   const q=document.getElementById('searchBox').value.toLowerCase().trim();
-  let rows=directory.slice();
+  // Granted candidates move to the Recruiting Pipeline tab — Search is only
+  // ever for finding and requesting new ones.
+  let rows=directory.filter(r=>(r.request||{}).request_status!=='granted');
   const testMode=!!filters.triviaTest;       // one specific test chosen
   const pctMode=filters.triviaMinPct>0;      // a percentile floor is set
 
@@ -550,14 +595,11 @@ function renderCandidates(){
   } else if(pctMode){
     rows=rows.filter(r=>bestQualifyingTrivia(r,filters.triviaMinPct)!=null);
   }
-  if(q) rows=rows.filter(r=>{
-    const g=grantedData[r.key];
-    const name=g?((g.first_name||'')+' '+(g.last_name||'')).toLowerCase():'';
-    return name.includes(q)||
-      (r.city||'').toLowerCase().includes(q)||(r.state||'').toLowerCase().includes(q)||
-      (r.hopeful_job||'').toLowerCase().includes(q)||
-      r.certs.some(c=>c.toLowerCase().includes(q));
-  });
+  if(q) rows=rows.filter(r=>
+    (r.city||'').toLowerCase().includes(q)||(r.state||'').toLowerCase().includes(q)||
+    (r.hopeful_job||'').toLowerCase().includes(q)||
+    r.certs.some(c=>c.toLowerCase().includes(q))
+  );
 
   if(geoFilter.active&&geoFilter.lat&&geoFilter.lng){
     rows=rows.map(r=>{
@@ -594,30 +636,18 @@ function renderCandidates(){
 
   tbody.innerHTML=rows.map(r=>{
     const req=r.request||{request_status:'none'};
-    const granted=req.request_status==='granted';
-    const g=granted?grantedData[r.key]:null;
     const excBadge=excTier(r.excScore);
     const certDisplay=r.certs.length?r.certs.slice(0,2).join(', ')+(r.certs.length>2?` +${r.certs.length-2}`:''):'—';
     const distTd=geoFilter.active?(r._dist!=null?`<td><span class="dist-badge">${r._dist.toFixed(1)} mi</span></td>`:'<td><span class="dist-badge">—</span></td>'):'';
     const payStr=payRangeStr(r);
-
-    let candidateTd,accessTd;
-    if(granted&&g){
-      const name=((g.first_name||'')+' '+(g.last_name||'')).trim()||'Candidate';
-      const rawPhone=g.mobile_phone?String(g.mobile_phone).split('.')[0].replace(/[^\d]/g,''):'';
-      candidateTd=`<td class="td-name" onclick="showDetail('${jsAttr(r.key)}')">${esc(name)}<br><span style="font-size:11px;color:var(--muted);font-weight:400">${esc(rawPhone)}${g.email_address?' &bull; '+esc(g.email_address):''}</span></td>`;
-      const statusOpts=STATUSES.map(s=>`<option${s===g.status?' selected':''}>${s}</option>`).join('');
-      const sc=STATUS_MAP[g.status]||'s-nc';
-      accessTd=`<td><select class="status-sel ${sc}" onchange="updateStatus('${jsAttr(r.key)}',this)">${statusOpts}</select></td>`;
+    const candidateTd=`<td><span style="color:var(--muted);font-style:italic;">&#128274; Contact hidden</span></td>`;
+    let accessTd;
+    if(req.request_status==='requested'){
+      accessTd=`<td><span style="color:var(--amber);font-size:11px;font-weight:700;">Requested — pending</span></td>`;
+    } else if(req.request_status==='denied'){
+      accessTd=`<td><span style="color:#f85149;font-size:11px;" title="${esc(req.denial_reason||'')}">Denied</span> <button class="tb-btn" style="border:1.5px solid var(--border);color:var(--muted);font-size:10px;padding:3px 8px;" onclick="requestAccess('${jsAttr(r.key)}')">Request Again</button></td>`;
     } else {
-      candidateTd=`<td><span style="color:var(--muted);font-style:italic;">&#128274; Contact hidden</span></td>`;
-      if(req.request_status==='requested'){
-        accessTd=`<td><span style="color:var(--amber);font-size:11px;font-weight:700;">Requested — pending</span></td>`;
-      } else if(req.request_status==='denied'){
-        accessTd=`<td><span style="color:#f85149;font-size:11px;" title="${esc(req.denial_reason||'')}">Denied</span> <button class="tb-btn" style="border:1.5px solid var(--border);color:var(--muted);font-size:10px;padding:3px 8px;" onclick="requestAccess('${jsAttr(r.key)}')">Request Again</button></td>`;
-      } else {
-        accessTd=`<td><button class="tb-btn tb-btn-green" style="font-size:10px;padding:4px 10px;" onclick="requestAccess('${jsAttr(r.key)}')">Request Contact Info</button></td>`;
-      }
+      accessTd=`<td><button class="tb-btn tb-btn-green" style="font-size:10px;padding:4px 10px;" onclick="requestAccess('${jsAttr(r.key)}')">Request Contact Info</button></td>`;
     }
 
     return `<tr>
@@ -631,6 +661,69 @@ function renderCandidates(){
       <td style="font-size:11px;max-width:170px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(triviaCellStr(r))}">${esc(triviaCellStr(r))}</td>
       <td style="font-size:11px;max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(r.certs.join(', '))}">${esc(certDisplay)}</td>
       ${accessTd}
+    </tr>`;
+  }).join('');
+}
+
+function switchCustomerTab(tab){
+  const search=document.getElementById('searchPanel'),pipeline=document.getElementById('pipelinePanel');
+  const tS=document.getElementById('tabSearch'),tP=document.getElementById('tabPipeline');
+  search.style.display=tab==='search'?'flex':'none';
+  pipeline.style.display=tab==='pipeline'?'flex':'none';
+  tS.classList.toggle('active',tab==='search');
+  tP.classList.toggle('active',tab==='pipeline');
+  if(tab==='pipeline') renderPipeline();
+}
+
+function updatePipelineBadge(){
+  const n=directory.filter(r=>(r.request||{}).request_status==='granted').length;
+  const b=document.getElementById('pipelineBadge');
+  if(b){ b.textContent=n; b.style.display=n?'inline-block':'none'; }
+}
+
+// Recruiting Pipeline: every candidate this company has been granted access
+// to — full contact info plus the hiring-status tracker.
+function renderPipeline(){
+  const q=(document.getElementById('pipeSearchBox')?.value||'').toLowerCase().trim();
+  const statusFilter=document.getElementById('pipeStatusFilter')?.value||'';
+  let rows=directory.filter(r=>(r.request||{}).request_status==='granted' && grantedData[r.key]);
+
+  if(statusFilter) rows=rows.filter(r=>(grantedData[r.key].status||'Not Contacted')===statusFilter);
+  if(q) rows=rows.filter(r=>{
+    const g=grantedData[r.key];
+    const name=((g.first_name||'')+' '+(g.last_name||'')).toLowerCase();
+    const phone=g.mobile_phone?String(g.mobile_phone).replace(/[^\d]/g,''):'';
+    return name.includes(q)||phone.includes(q)||
+      (r.city||'').toLowerCase().includes(q)||(r.state||'').toLowerCase().includes(q);
+  });
+  rows.sort((a,b)=>{
+    const an=((grantedData[a.key].first_name||'')+' '+(grantedData[a.key].last_name||'')).trim();
+    const bn=((grantedData[b.key].first_name||'')+' '+(grantedData[b.key].last_name||'')).trim();
+    return an.localeCompare(bn);
+  });
+
+  document.getElementById('pipeCountLabel').textContent=rows.length.toLocaleString()+' candidates';
+  const tbody=document.getElementById('pipeTbody');
+  if(!rows.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--muted);font-style:italic;">No candidates in your pipeline yet — request access to someone in the Search tab.</td></tr>';return;}
+
+  tbody.innerHTML=rows.map(r=>{
+    const g=grantedData[r.key];
+    const name=((g.first_name||'')+' '+(g.last_name||'')).trim()||'Candidate';
+    const rawPhone=g.mobile_phone?String(g.mobile_phone).split('.')[0].replace(/[^\d]/g,''):'';
+    const excBadge=excTier(r.excScore);
+    const certDisplay=r.certs.length?r.certs.slice(0,2).join(', ')+(r.certs.length>2?` +${r.certs.length-2}`:''):'—';
+    const payStr=payRangeStr(r);
+    const statusOpts=STATUSES.map(s=>`<option${s===g.status?' selected':''}>${s}</option>`).join('');
+    const sc=STATUS_MAP[g.status]||'s-nc';
+    return `<tr>
+      <td style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--blue);white-space:nowrap">${esc(r.hopeful_job)||'—'}</td>
+      <td style="font-size:12px;white-space:nowrap">${payStr}</td>
+      <td class="td-name" onclick="showDetail('${jsAttr(r.key)}')">${esc(name)}<br><span style="font-size:11px;color:var(--muted);font-weight:400">${esc(rawPhone)}${g.email_address?' &bull; '+esc(g.email_address):''}</span></td>
+      <td style="font-family:'Barlow Condensed',sans-serif;white-space:nowrap">${esc(r.city)||'—'}</td>
+      <td style="font-family:'Barlow Condensed',sans-serif;font-weight:700">${esc(r.state)||'—'}</td>
+      <td>${excBadge}</td>
+      <td style="font-size:11px;max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(r.certs.join(', '))}">${esc(certDisplay)}</td>
+      <td><select class="status-sel ${sc}" onchange="updateStatus('${jsAttr(r.key)}',this)">${statusOpts}</select></td>
     </tr>`;
   }).join('');
 }
