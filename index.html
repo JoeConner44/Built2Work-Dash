@@ -2797,7 +2797,7 @@ function renderFollowup(){
   document.getElementById('followupCount').textContent = rows.length.toLocaleString()+' candidates';
   const tbody = document.getElementById('followupTbody');
   if(!rows.length){
-    tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--muted);font-style:italic;">No candidates found.</td></tr>';
+    tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--muted);font-style:italic;">No candidates found.</td></tr>';
     return;
   }
   const outcomeOpts = ['', 'Contacted','Wrong Number','No Response'];
@@ -2819,6 +2819,7 @@ function renderFollowup(){
       </td>
       <td style="font-size:12px">${esc(r.hopeful_job)||'—'}</td>
       <td style="font-size:12px">${payStr}</td>
+      <td style="text-align:center"><input type="checkbox" ${r.further_vetted?'checked':''} onchange="updateFollowupField('${jsAttr(r.id)}','further_vetted',this.checked)" title="Mark this candidate as further vetted by BTW staff — shown as a filterable check on the customer portal, no detail is shared"></td>
       <td class="pipe-notes-cell" title="${esc(r.notes)}">${esc(r.notes)||'—'}</td>
       <td><button onclick="openFollowupEdit('${jsAttr(r.id)}')" style="font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:3px 10px;border:1.5px solid var(--border);background:transparent;color:var(--muted);border-radius:3px;cursor:pointer;">&#9998; Edit</button></td>
     </tr>`;
@@ -3615,6 +3616,7 @@ async function bulkAddToUnassigned(){
         <th>Interest</th>
         <th>Hopeful Job</th>
         <th>Pay Range</th>
+        <th>Further Vetted</th>
         <th>Notes</th>
         <th></th>
       </tr></thead>
