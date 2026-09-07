@@ -87,7 +87,7 @@ create or replace function public.candidate_token(p_phone text)
 returns text
 language sql immutable
 as $$
-  select substring(encode(digest(coalesce(p_phone,'') || 'CHANGE-ME-btw-followup-salt-2026', 'sha256'), 'hex') from 1 for 24)
+  select substring(encode(digest(coalesce(p_phone,'') || 'sjfkjdsfkjsakfjdsalfjskdjfksjfsajfitiehdghdjsajgdsjajsjfshlgdsjl', 'sha256'), 'hex') from 1 for 24)
 $$;
 
 -- ── 3. Masked directory views (no name / phone / email / street address) ────
