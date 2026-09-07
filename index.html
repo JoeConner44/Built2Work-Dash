@@ -702,6 +702,8 @@ footer{border-top:1px solid var(--border);}
   <button class="pipe-tab active" id="tabAnalytics" onclick="switchPipeTab('analytics')" style="font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:11px 18px;background:transparent;border:none;border-bottom:2px solid #ce0e2d;color:#ce0e2d;cursor:pointer;margin-bottom:-1px;">&#9632; Analytics</button>
   <button class="pipe-tab" id="tabPipeline" onclick="switchPipeTab('pipeline')" style="font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:11px 18px;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;margin-bottom:-1px;">&#9632; Pipeline <span id="pipeBadge" class="pipe-badge" style="display:none">0</span></button>
   <button class="pipe-tab" id="tabLeads" onclick="switchPipeTab('leads')" style="font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:11px 18px;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;margin-bottom:-1px;">&#9632; Internet Leads</button>
+  <button class="pipe-tab" id="tabRequests" onclick="switchPipeTab('requests')" style="font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:11px 18px;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;margin-bottom:-1px;">&#9632; Access Requests <span id="requestsBadge" class="pipe-badge" style="display:none">0</span></button>
+  <button class="pipe-tab" id="tabFollowup" onclick="switchPipeTab('followup')" style="font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:11px 18px;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;margin-bottom:-1px;">&#9632; Follow-Up <span id="followupBadge" class="pipe-badge" style="display:none">0</span></button>
 </div>
 <div id="appLayout" style="display:none;">
   <!-- SIDEBAR -->
@@ -1005,6 +1007,41 @@ const CERT_INFO={
   'MCAA':{full:'Mechanical Contractors Association of America Certification',desc:'Credential from the MCAA covering mechanical trade skills such as pipefitting, plumbing, and HVAC service.'}
 };
 const TRIVIA_COLS={'Auto Mechanic':'Trivia Auto Mechanic Score','Civil Construction':'Trivia Civil Construction Score','Electrical':'Trivia Electrical Score','Plumbing':'Trivia Plumbing Score','Welding':'Trivia Welding Score','Construction Labor':'Trivia Construction Labor Score','HVAC':'Trivia HVAC Score','Warehouse':'Trivia Warehouse Score','Heavy Equipment Tech':'Trivia Heavy Equipment Technician Score'};
+
+// ── TRIVIA PERCENTILE HELPERS ─────────────────────────────────────────────────
+function getOrdinalSuffix(n){
+  const v=n%100;
+  if(v>=11&&v<=13) return 'th';
+  switch(n%10){case 1:return 'st';case 2:return 'nd';case 3:return 'rd';default:return 'th';}
+}
+
+// Returns { [testName]: Map(phone -> percentile 0-100) }, each candidate's
+// percentile computed against everyone who took that specific trade test.
+function computeTriviaPercentiles(winRows){
+  const byTest={};
+  Object.entries(TRIVIA_COLS).forEach(([name,col])=>{
+    const scored=winRows.map(r=>{
+      const p=normalizePhone(r['Mobile Phone']||r['QR Code Scan']||'');
+      const v=parseFloat(r[col]);
+      return (p&&!isNaN(v))?{phone:p,score:v}:null;
+    }).filter(Boolean);
+    const sorted=scored.map(s=>s.score).sort((a,b)=>a-b);
+    const n=sorted.length;
+    const map=new Map();
+    scored.forEach(({phone,score})=>{
+      let lo=0,hi=n;
+      while(lo<hi){const mid=(lo+hi)>>1; if(sorted[mid]<score) lo=mid+1; else hi=mid;}
+      const below=lo;
+      lo=0;hi=n;
+      while(lo<hi){const mid=(lo+hi)>>1; if(sorted[mid]<=score) lo=mid+1; else hi=mid;}
+      const tied=lo-below;
+      const pct=n>1?Math.round(((below+0.5*tied)/n)*100):100;
+      if(!map.has(phone)||map.get(phone)<pct) map.set(phone,pct);
+    });
+    byTest[name]=map;
+  });
+  return byTest;
+}
 
 let filters={events:new Set(),excMin:0,excMax:100,jobInterest:new Set(),employment:new Set(),scoreSegs:new Set(),ageGroups:new Set(),gender:new Set(),states:new Set(),trivia:new Set(),triviaScoreMin:0,triviaScoreMax:20,certs:new Set()};
 
@@ -1563,6 +1600,7 @@ function buildColItem(list,col){
 // ─── RENDER TABLE ─────────────────────────────────────────────────────────────
 function renderTable(webRows,excRows,winRows){
   const eMap=excMap(excRows),wMap=webMap(webRows),nMap=winMap(winRows);
+  const triviaPct=computeTriviaPercentiles(winRows);
   const allPhones=new Set();
   webRows.forEach(r=>allPhones.add(normalizePhone(getPhone(r,false))));
   excRows.forEach(r=>allPhones.add(normalizePhone(getPhone(r,true))));
@@ -1580,12 +1618,13 @@ function renderTable(webRows,excRows,winRows){
     const ji=w?(w['Interested in Construction Jobs']||'').trim():'';
     let triviaStr='---';
     if(n){
+      const pctFor=(testName)=>{const m=triviaPct[testName];const p=m&&m.get(phone);return p!=null?' — '+p+getOrdinalSuffix(p)+' pctl':'';};
       if(filters.trivia.size===1){
         const selTest=[...filters.trivia][0];const col=TRIVIA_COLS[selTest];const score=col?parseFloat(n[col]):NaN;
-        triviaStr=isNaN(score)?'DNC':selTest+': '+score.toFixed(0);
+        triviaStr=isNaN(score)?'DNC':selTest+': '+score.toFixed(0)+pctFor(selTest);
       }else{
         const taken=Object.entries(TRIVIA_COLS).filter(([nm,col])=>n[col]!==''&&n[col]!=null&&!isNaN(parseFloat(n[col])));
-        if(taken.length)triviaStr=taken.map(([nm,col])=>nm+': '+parseFloat(n[col]).toFixed(0)).join(', ');
+        if(taken.length)triviaStr=taken.map(([nm,col])=>nm+': '+parseFloat(n[col]).toFixed(0)+pctFor(nm)).join(', ');
       }
     }
     const rawPhone=w?String(w['Mobile Phone']||'').split('.')[0].replace(/[^\d]/g,''):e?String(e['Login Code']||'').replace(/[^\d]/g,''):phone;
@@ -2197,6 +2236,8 @@ async function loadCRMData(){
       });
     }
     await loadStatusEvents(); // badge/feed/rejection history
+    updateRequestsBadge();
+    updateFollowupBadge();
   } catch(e){ console.error('CRM load error:',e); }
 }
 
@@ -2205,13 +2246,19 @@ function switchPipeTab(tab){
   const analytics = document.getElementById('appLayout');
   const pipeline  = document.getElementById('pipelinePanel');
   const leads     = document.getElementById('leadsPanel');
+  const requests  = document.getElementById('requestsPanel');
+  const followup  = document.getElementById('followupPanel');
   const tA = document.getElementById('tabAnalytics');
   const tP = document.getElementById('tabPipeline');
   const tL = document.getElementById('tabLeads');
+  const tR = document.getElementById('tabRequests');
+  const tF = document.getElementById('tabFollowup');
   analytics.style.display = tab==='analytics' ? 'flex' : 'none';
   pipeline.style.display  = tab==='pipeline'  ? 'flex' : 'none';
   leads.style.display     = tab==='leads'     ? 'flex' : 'none';
-  [[tA,'analytics'],[tP,'pipeline'],[tL,'leads']].forEach(([el,name])=>{
+  requests.style.display  = tab==='requests'  ? 'flex' : 'none';
+  followup.style.display  = tab==='followup'  ? 'flex' : 'none';
+  [[tA,'analytics'],[tP,'pipeline'],[tL,'leads'],[tR,'requests'],[tF,'followup']].forEach(([el,name])=>{
     el.style.color = tab===name ? '#ce0e2d' : 'var(--muted)';
     el.style.borderBottomColor = tab===name ? '#ce0e2d' : 'transparent';
   });
@@ -2219,6 +2266,10 @@ function switchPipeTab(tab){
     loadCRMData().then(()=>{ renderPipeline(); markEventsSeen(); });
   } else if(tab==='leads'){
     loadLeadsData().then(renderLeads);
+  } else if(tab==='requests'){
+    loadCRMData().then(renderRequests);
+  } else if(tab==='followup'){
+    loadCRMData().then(()=>seedFollowupRows().then(renderFollowup));
   }
 }
 
@@ -2438,6 +2489,10 @@ async function saveAssignment(){
     fileUrl = urlData?.publicUrl || null;
   }
 
+  // Assigning a candidate to a company is also how staff proactively grant
+  // that company full contact info for them (see openGrantModal) — every
+  // save here marks the relationship granted, whether it started from this
+  // dropdown or from approving a customer's request elsewhere.
   const payload = {
     phone:        assignPhone,
     company_id:   companyId,
@@ -2448,6 +2503,9 @@ async function saveAssignment(){
     notes:        document.getElementById('assignNotes').value.trim(),
     assigned_by:  user?.email || '',
     status:       'Not Contacted',
+    request_status: 'granted',
+    granted_at:   new Date().toISOString(),
+    granted_by:   user?.email || '',
   };
   if(fileUrl) payload.file_url = fileUrl;
 
@@ -2616,6 +2674,270 @@ async function pipelineMoveToUnassigned(id, name, company, btn){
   if(error){ alert('Error re-adding to pool: '+error.message); }
   await loadCRMData();
   renderPipeline();
+}
+
+// ── ACCESS REQUESTS TAB ──────────────────────────────────────────────────────
+function updateRequestsBadge(){
+  const n = assignments.filter(a=>a.company_id && a.request_status==='requested').length;
+  const b = document.getElementById('requestsBadge');
+  if(b){ b.textContent=n; b.style.display=n?'inline-block':'none'; }
+}
+
+function renderRequests(){
+  updateRequestsBadge();
+  let rows = assignments.filter(a=>a.company_id && a.request_status==='requested').map(a=>{
+    const company = companies.find(c=>c.id===a.company_id);
+    const w = rawWeb.find(r=>normalizePhone(r['Mobile Phone']||'')===a.phone);
+    const name = w ? ((w['First Name']||'')+' '+(w['Last Name']||'')).trim() : '';
+    return {...a, companyName: company?company.name:'Unknown company', name: name || ('Phone: '+a.phone)};
+  });
+  rows.sort((a,b)=> new Date(b.requested_at||0) - new Date(a.requested_at||0));
+  document.getElementById('requestsCount').textContent = rows.length.toLocaleString()+' pending';
+  const tbody = document.getElementById('requestsTbody');
+  if(!rows.length){
+    tbody.innerHTML='<tr><td colspan="4" style="text-align:center;padding:40px;color:var(--muted);font-style:italic;">No pending requests.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(r=>`
+    <tr>
+      <td><span class="pipe-name">${esc(r.name)}</span><br><span style="font-size:11px;color:var(--muted)">${esc(r.phone)}</span></td>
+      <td>${esc(r.companyName)}</td>
+      <td class="pipe-time">${timeAgo(r.requested_at)}</td>
+      <td style="white-space:nowrap;display:flex;gap:6px;">
+        <button onclick="approveRequest('${jsAttr(r.id)}')" style="font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:4px 12px;border:1.5px solid var(--green);background:transparent;color:var(--green);border-radius:3px;cursor:pointer;" onmouseover="this.style.background='var(--green)';this.style.color='#fff'" onmouseout="this.style.background='transparent';this.style.color='var(--green)'">&#10003; Approve</button>
+        <button onclick="denyRequest('${jsAttr(r.id)}','${jsAttr(r.name)}')" style="font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:4px 12px;border:1.5px solid #f85149;background:transparent;color:#f85149;border-radius:3px;cursor:pointer;" onmouseover="this.style.background='#f85149';this.style.color='#fff'" onmouseout="this.style.background='transparent';this.style.color='#f85149'">&#x2715; Deny</button>
+      </td>
+    </tr>`).join('');
+}
+
+async function approveRequest(id){
+  const {data:{user}} = await sb.auth.getUser();
+  const {error} = await sb.from('candidate_assignments').update({
+    request_status:'granted', granted_at:new Date().toISOString(), granted_by:user?.email||'',
+    denied_at:null, denial_reason:null, status:'Not Contacted'
+  }).eq('id',id);
+  if(error){ alert('Error: '+error.message); return; }
+  await loadCRMData();
+  renderRequests();
+}
+
+async function denyRequest(id,name){
+  const reason = prompt('Reason for denying access to '+name+' (internal — not shared with the company):')||'';
+  const {error} = await sb.from('candidate_assignments').update({
+    request_status:'denied', denied_at:new Date().toISOString(), denial_reason:reason
+  }).eq('id',id);
+  if(error){ alert('Error: '+error.message); return; }
+  await loadCRMData();
+  renderRequests();
+}
+
+// Proactive grants reuse the existing "double-click a candidate → Assign"
+// flow (onCandidateDblClick/saveAssignment below): saving that modal now
+// always marks the assignment as granted, whether it started from a request
+// or from staff picking a candidate for a company on their own.
+function openGrantModal(){
+  alert('To proactively grant a candidate: double-click their name in the Participants table or the Internet Leads tab and choose a company. Saving immediately grants that company full contact info for the candidate.');
+}
+
+// ── FOLLOW-UP TAB ─────────────────────────────────────────────────────────────
+async function seedFollowupRows(){
+  const existingPhones = new Set(assignments.filter(a=>!a.company_id).map(a=>a.phone));
+  const seen = new Set();
+  const missing = [];
+  rawWeb.forEach(r=>{
+    const ji = (r['Interested in Construction Jobs']||'').trim();
+    if(ji!=='Yes' && ji!=='Maybe') return;
+    const phone = normalizePhone(r['Mobile Phone']||'');
+    if(!phone || existingPhones.has(phone) || seen.has(phone)) return;
+    seen.add(phone);
+    missing.push({phone, company_id:null});
+  });
+  if(!missing.length) return;
+  // Best-effort: a concurrent load from another staff session can race this
+  // insert against the partial unique index on (phone) WHERE company_id IS
+  // NULL — the loser's insert fails, which just means it lost the race, not
+  // a real error, so this only warns rather than alerting the user.
+  const {error} = await sb.from('candidate_assignments').insert(missing);
+  if(error) console.warn('Follow-up seed insert (some rows may already exist):', error.message);
+  await loadCRMData();
+}
+
+function updateFollowupBadge(){
+  const today = new Date().toISOString().slice(0,10);
+  const n = assignments.filter(a=>!a.company_id && a.interest_disposition==='Future Contact' && a.reminder_date && a.reminder_date<=today).length;
+  const b = document.getElementById('followupBadge');
+  if(b){ b.textContent=n; b.style.display=n?'inline-block':'none'; }
+}
+
+function renderFollowup(){
+  updateFollowupBadge();
+  const q = (document.getElementById('followupSearch')?.value||'').toLowerCase().trim();
+  const dispFilter = document.getElementById('followupDispFilter')?.value || '';
+  const today = new Date().toISOString().slice(0,10);
+  let rows = assignments.filter(a=>!a.company_id).map(a=>{
+    const w = rawWeb.find(r=>normalizePhone(r['Mobile Phone']||'')===a.phone);
+    const name = w ? ((w['First Name']||'')+' '+(w['Last Name']||'')).trim() : '';
+    return {...a, name: name || ('Phone: '+a.phone), email: w?(w['Email Address']||''):''};
+  });
+  if(dispFilter) rows = rows.filter(r=>(r.interest_disposition||'')===dispFilter);
+  if(q) rows = rows.filter(r=> r.name.toLowerCase().includes(q) || r.phone.includes(q) || r.email.toLowerCase().includes(q));
+  rows.sort((a,b)=>{
+    const ad = a.interest_disposition==='Future Contact' && a.reminder_date ? a.reminder_date : '9999-99-99';
+    const bd = b.interest_disposition==='Future Contact' && b.reminder_date ? b.reminder_date : '9999-99-99';
+    return ad.localeCompare(bd);
+  });
+
+  const dueCount = rows.filter(r=>r.interest_disposition==='Future Contact' && r.reminder_date && r.reminder_date<=today).length;
+  const banner = document.getElementById('followupDueBanner');
+  if(banner){
+    banner.style.display = dueCount ? 'block' : 'none';
+    banner.textContent = `⏰ ${dueCount} reminder${dueCount===1?'':'s'} due today or earlier`;
+  }
+
+  document.getElementById('followupCount').textContent = rows.length.toLocaleString()+' candidates';
+  const tbody = document.getElementById('followupTbody');
+  if(!rows.length){
+    tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--muted);font-style:italic;">No candidates found.</td></tr>';
+    return;
+  }
+  const outcomeOpts = ['', 'Contacted','Wrong Number','No Response'];
+  const dispOpts = ['', 'Interested','Future Contact','Not Interested'];
+  tbody.innerHTML = rows.map(r=>{
+    const dueToday = r.interest_disposition==='Future Contact' && r.reminder_date && r.reminder_date<=today;
+    const payStr = (r.pay_min!=null||r.pay_max!=null) ? ('$'+(r.pay_min??'?')+'–$'+(r.pay_max??'?')) : '—';
+    return `<tr>
+      <td><span class="pipe-name">${esc(r.name)}</span><br><span style="font-size:11px;color:var(--muted)">${esc(r.phone)}</span></td>
+      <td style="font-size:12px">${esc(r.email)||'—'}</td>
+      <td><select class="pipe-filter-select" onchange="updateFollowupField('${jsAttr(r.id)}','contact_outcome',this.value||null)">
+        ${outcomeOpts.map(o=>`<option value="${esc(o)}"${(r.contact_outcome||'')===o?' selected':''}>${o||'—'}</option>`).join('')}
+      </select></td>
+      <td>
+        <select class="pipe-filter-select" onchange="onFollowupDisposition('${jsAttr(r.id)}',this.value)">
+          ${dispOpts.map(o=>`<option value="${esc(o)}"${(r.interest_disposition||'')===o?' selected':''}>${o||'—'}</option>`).join('')}
+        </select>
+        ${r.interest_disposition==='Future Contact'?`<div style="font-size:11px;margin-top:4px;${dueToday?'color:#ce0e2d;font-weight:700':'color:var(--muted)'}">${r.reminder_date?('Due '+r.reminder_date+(dueToday?' — NOW':'')):'No date set'} <span onclick="openReminderModal('${jsAttr(r.id)}')" style="cursor:pointer;color:var(--blue);text-decoration:underline;">Set</span></div>`:''}
+      </td>
+      <td style="font-size:12px">${esc(r.hopeful_job)||'—'}</td>
+      <td style="font-size:12px">${payStr}</td>
+      <td class="pipe-notes-cell" title="${esc(r.notes)}">${esc(r.notes)||'—'}</td>
+      <td><button onclick="openFollowupEdit('${jsAttr(r.id)}')" style="font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:3px 10px;border:1.5px solid var(--border);background:transparent;color:var(--muted);border-radius:3px;cursor:pointer;">&#9998; Edit</button></td>
+    </tr>`;
+  }).join('');
+}
+
+async function updateFollowupField(id, field, value){
+  const {error} = await sb.from('candidate_assignments').update({[field]:value}).eq('id',id);
+  if(error){ alert('Error: '+error.message); return; }
+  const a = assignments.find(x=>x.id===id);
+  if(a) a[field]=value;
+  renderFollowup();
+}
+
+async function onFollowupDisposition(id, value){
+  const a = assignments.find(x=>x.id===id);
+  if(!a) return;
+  if(value==='Future Contact'){
+    await updateFollowupField(id, 'interest_disposition', value);
+    openReminderModal(id);
+  } else {
+    const {error} = await sb.from('candidate_assignments').update({
+      interest_disposition: value||null, reminder_date:null, reminder_set_by:null, reminder_sent_at:null
+    }).eq('id',id);
+    if(error){ alert('Error: '+error.message); return; }
+    a.interest_disposition = value||null; a.reminder_date=null; a.reminder_set_by=null; a.reminder_sent_at=null;
+    renderFollowup();
+  }
+}
+
+let reminderEditId=null;
+function openReminderModal(id){
+  const a = assignments.find(x=>x.id===id);
+  if(!a) return;
+  reminderEditId = id;
+  const w = rawWeb.find(r=>normalizePhone(r['Mobile Phone']||'')===a.phone);
+  const name = w ? ((w['First Name']||'')+' '+(w['Last Name']||'')).trim() : ('Phone: '+a.phone);
+  document.getElementById('reminderCandidateName').textContent = name;
+  document.getElementById('reminderDate').value = a.reminder_date || '';
+  document.getElementById('reminderMsg').textContent = '';
+  document.getElementById('reminderOverlay').classList.add('open');
+}
+function closeReminderModal(e){
+  if(e && e.target!==document.getElementById('reminderOverlay')) return;
+  document.getElementById('reminderOverlay').classList.remove('open');
+  reminderEditId=null;
+}
+async function saveReminder(){
+  const date = document.getElementById('reminderDate').value;
+  const msg = document.getElementById('reminderMsg');
+  if(!date){ msg.style.color='#f85149'; msg.textContent='Pick a date.'; return; }
+  const {data:{user}} = await sb.auth.getUser();
+  const {error} = await sb.from('candidate_assignments').update({
+    reminder_date: date, reminder_set_by: user?.email||'', reminder_sent_at: null
+  }).eq('id', reminderEditId);
+  if(error){ msg.style.color='#f85149'; msg.textContent='Error: '+error.message; return; }
+  const a = assignments.find(x=>x.id===reminderEditId);
+  if(a){ a.reminder_date=date; a.reminder_set_by=user?.email||''; a.reminder_sent_at=null; }
+  document.getElementById('reminderOverlay').classList.remove('open');
+  renderFollowup();
+}
+
+let followupEditId=null, followupEditFile=null;
+function openFollowupEdit(id){
+  const a = assignments.find(x=>x.id===id);
+  if(!a) return;
+  followupEditId = id; followupEditFile=null;
+  const w = rawWeb.find(r=>normalizePhone(r['Mobile Phone']||'')===a.phone);
+  const name = w ? ((w['First Name']||'')+' '+(w['Last Name']||'')).trim() : ('Phone: '+a.phone);
+  document.getElementById('followupEditName').textContent = name;
+  document.getElementById('fuHopefulJob').value = a.hopeful_job||'';
+  document.getElementById('fuPayMin').value = a.pay_min ?? '';
+  document.getElementById('fuPayMax').value = a.pay_max ?? '';
+  document.getElementById('fuWorkHistory').value = a.work_history||'';
+  document.getElementById('fuNotes').value = a.notes||'';
+  document.getElementById('fuFileName').textContent='';
+  document.getElementById('fuFileExisting').innerHTML = a.file_url ? `<a href="${a.file_url}" target="_blank" style="color:var(--blue)">&#128206; View existing resume</a>` : '';
+  document.getElementById('fuMsg').textContent='';
+  document.getElementById('followupEditOverlay').classList.add('open');
+}
+function closeFollowupEdit(e){
+  if(e && e.target!==document.getElementById('followupEditOverlay')) return;
+  document.getElementById('followupEditOverlay').classList.remove('open');
+  followupEditId=null; followupEditFile=null;
+}
+function onFuFileChange(input){
+  followupEditFile = input.files && input.files[0] ? input.files[0] : null;
+  document.getElementById('fuFileName').textContent = followupEditFile ? followupEditFile.name : '';
+}
+async function saveFollowupEdit(){
+  const msg = document.getElementById('fuMsg');
+  const a = assignments.find(x=>x.id===followupEditId);
+  if(!a) return;
+  msg.style.color='var(--muted)'; msg.textContent='Saving…';
+  let fileUrl = a.file_url || null;
+  if(followupEditFile){
+    const v = validateUploadFile(followupEditFile);
+    if(!v.ok){ msg.style.color='#f85149'; msg.textContent=v.error; return; }
+    const path = `followup/${a.phone}_${Date.now()}.${v.ext}`;
+    const {error:upErr} = await sb.storage.from('candidate-files').upload(path, followupEditFile, {upsert:true});
+    if(upErr){ msg.style.color='#f85149'; msg.textContent='File upload error: '+upErr.message; return; }
+    const {data:urlData} = sb.storage.from('candidate-files').getPublicUrl(path);
+    fileUrl = urlData?.publicUrl || null;
+  }
+  const payMinRaw = document.getElementById('fuPayMin').value;
+  const payMaxRaw = document.getElementById('fuPayMax').value;
+  const payload = {
+    hopeful_job: document.getElementById('fuHopefulJob').value.trim(),
+    pay_min: payMinRaw===''?null:Number(payMinRaw),
+    pay_max: payMaxRaw===''?null:Number(payMaxRaw),
+    work_history: document.getElementById('fuWorkHistory').value.trim(),
+    notes: document.getElementById('fuNotes').value.trim(),
+    file_url: fileUrl,
+  };
+  const {error} = await sb.from('candidate_assignments').update(payload).eq('id', followupEditId);
+  if(error){ msg.style.color='#f85149'; msg.textContent='Error: '+error.message; return; }
+  Object.assign(a, payload);
+  msg.style.color='var(--green)'; msg.textContent='✓ Saved!';
+  setTimeout(()=>{ document.getElementById('followupEditOverlay').classList.remove('open'); renderFollowup(); }, 600);
 }
 
 function exportPipelineExcel(){
@@ -3251,6 +3573,125 @@ async function bulkAddToUnassigned(){
       </tr></thead>
       <tbody id="leadsTbody"></tbody>
     </table>
+  </div>
+</div>
+
+<div id="requestsPanel" style="display:none;flex:1;overflow-y:auto;flex-direction:column;">
+  <div class="pipe-toolbar">
+    <span class="pipe-count" id="requestsCount"></span>
+    <button class="pipe-export-btn" onclick="openGrantModal()">+ Grant Access</button>
+  </div>
+  <div class="pipe-table-wrap">
+    <table class="pipe-tbl">
+      <thead><tr>
+        <th>Candidate</th>
+        <th>Requesting Company</th>
+        <th>Requested</th>
+        <th></th>
+      </tr></thead>
+      <tbody id="requestsTbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div id="followupPanel" style="display:none;flex:1;overflow-y:auto;flex-direction:column;">
+  <div id="followupDueBanner" style="display:none;background:rgba(206,14,45,.1);color:#ce0e2d;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;padding:8px 18px;"></div>
+  <div class="pipe-toolbar">
+    <select class="pipe-filter-select" id="followupDispFilter" onchange="renderFollowup()">
+      <option value="">All Dispositions</option>
+      <option>Interested</option>
+      <option>Future Contact</option>
+      <option>Not Interested</option>
+    </select>
+    <input class="pipe-search" id="followupSearch" placeholder="Search name / phone / email…" oninput="renderFollowup()">
+    <span class="pipe-count" id="followupCount"></span>
+  </div>
+  <div class="pipe-table-wrap">
+    <table class="pipe-tbl">
+      <thead><tr>
+        <th>Candidate</th>
+        <th>Email</th>
+        <th>Contact Outcome</th>
+        <th>Interest</th>
+        <th>Hopeful Job</th>
+        <th>Pay Range</th>
+        <th>Notes</th>
+        <th></th>
+      </tr></thead>
+      <tbody id="followupTbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══ REMINDER MODAL ══ -->
+<div class="assign-overlay" id="reminderOverlay" onclick="closeReminderModal(event)">
+  <div class="assign-modal" style="max-width:360px;">
+    <div class="assign-header">
+      <div><div class="assign-title">Set Reminder</div><div class="assign-name" id="reminderCandidateName"></div></div>
+      <button class="assign-close" onclick="closeReminderModal()">&#x2715;</button>
+    </div>
+    <div class="assign-body">
+      <div class="assign-field">
+        <label class="assign-label">Follow up on</label>
+        <input class="assign-input" type="date" id="reminderDate">
+      </div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.5;">You'll get an email reminder on this date (sent to your staff account) and it'll show as due on this page.</div>
+      <div id="reminderMsg" style="font-size:12px;margin-top:8px;"></div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;padding:0 24px 20px;">
+      <button class="tb-btn" style="border:1.5px solid var(--border);background:transparent;color:var(--muted);" onclick="closeReminderModal()">Cancel</button>
+      <button class="tb-btn tb-btn-green" onclick="saveReminder()">Save Reminder</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ FOLLOW-UP EDIT MODAL ══ -->
+<div class="assign-overlay" id="followupEditOverlay" onclick="closeFollowupEdit(event)">
+  <div class="assign-modal">
+    <div class="assign-header">
+      <div><div class="assign-title">Edit Candidate</div><div class="assign-name" id="followupEditName"></div></div>
+      <button class="assign-close" onclick="closeFollowupEdit()">&#x2715;</button>
+    </div>
+    <div class="assign-body">
+      <div class="assign-field">
+        <label class="assign-label">Hopeful Job</label>
+        <input class="assign-input" id="fuHopefulJob" placeholder="e.g. CDL Driver, Welder…">
+      </div>
+      <div class="assign-field" style="display:flex;gap:10px;">
+        <div style="flex:1;">
+          <label class="assign-label">Pay Min ($)</label>
+          <input class="assign-input" type="number" id="fuPayMin" placeholder="e.g. 22">
+        </div>
+        <div style="flex:1;">
+          <label class="assign-label">Pay Max ($)</label>
+          <input class="assign-input" type="number" id="fuPayMax" placeholder="e.g. 28">
+        </div>
+      </div>
+      <div class="assign-field">
+        <label class="assign-label">Work History</label>
+        <textarea class="assign-textarea" id="fuWorkHistory" placeholder="Previous employers, roles, years of experience…" style="min-height:80px"></textarea>
+      </div>
+      <div class="assign-field">
+        <label class="assign-label">Notes <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);font-family:'Barlow',sans-serif;font-size:11px">(never shown to customers)</span></label>
+        <textarea class="assign-textarea" id="fuNotes" placeholder="Any notes about this candidate…"></textarea>
+      </div>
+      <div class="assign-field">
+        <label class="assign-label">Resume <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);font-family:'Barlow',sans-serif;font-size:11px">(only visible to a company once access is granted)</span></label>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <label style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:6px 14px;border:1.5px dashed var(--border);border-radius:4px;cursor:pointer;color:var(--muted);">
+            &#8679; Choose File
+            <input type="file" id="fuFile" style="display:none" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onchange="onFuFileChange(this)">
+          </label>
+          <span id="fuFileName" style="font-size:11px;color:var(--muted);font-family:'Barlow Condensed',sans-serif;"></span>
+          <span id="fuFileExisting" style="font-size:11px;color:var(--blue);font-family:'Barlow Condensed',sans-serif;"></span>
+        </div>
+      </div>
+      <div id="fuMsg" style="font-size:12px;"></div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;padding:0 24px 20px;">
+      <button class="tb-btn" style="border:1.5px solid var(--border);background:transparent;color:var(--muted);" onclick="closeFollowupEdit()">Cancel</button>
+      <button class="tb-btn tb-btn-green" onclick="saveFollowupEdit()">Save</button>
+    </div>
   </div>
 </div>
 
