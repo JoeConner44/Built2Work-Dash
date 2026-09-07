@@ -2230,7 +2230,7 @@ async function loadCRMData(){
     // Populate pipeline company filter
     const cf = document.getElementById('pipeCompanyFilter');
     if(cf){
-      cf.innerHTML = '<option value="">All Companies</option><option value="UNASSIGNED">&#9632; Unassigned Pipeline</option>';
+      cf.innerHTML = '<option value="">All Companies</option>';
       companies.forEach(c=>{
         const o=document.createElement('option');o.value=c.id;o.textContent=c.name;cf.appendChild(o);
       });
@@ -2518,6 +2518,7 @@ async function saveAssignment(){
 }
 
 // ── PIPELINE RENDER ───────────────────────────────────────────────────────────
+const STATUSES=['Not Contacted','Contacted','Interviewed','Offered','Hired','Rejected'];
 function statusClass(s){
   const m={'Not Contacted':'not-contacted','Contacted':'contacted',
            'Interviewed':'interviewed','Offered':'offered','Hired':'hired','Rejected':'rejected'};
@@ -2536,142 +2537,99 @@ function pipeSortBy(col){
   renderPipeline();
 }
 
+// Staff-wide oversight of every company's granted candidates and hiring
+// status — the Unassigned/master rows now live entirely in the Follow-Up
+// tab, and hopeful_job/pay range are read-only here (pulled from that same
+// master row) since they're shared across every company, not per-company.
 function renderPipeline(){
   const compFilter   = document.getElementById('pipeCompanyFilter')?.value  || '';
   const statusFilter = document.getElementById('pipeStatusFilter')?.value   || '';
   const q            = (document.getElementById('pipeSearch')?.value || '').toLowerCase().trim();
 
-  // Join assignments with companies + web_registration lookup
-  let rows = assignments.map(a=>{
+  const masterByPhone = {};
+  assignments.filter(a=>!a.company_id).forEach(a=>{ masterByPhone[a.phone]=a; });
+
+  let rows = assignments.filter(a=>a.company_id).map(a=>{
     const company = companies.find(c=>c.id===a.company_id);
-    // Look up name from rawWeb
     const w = rawWeb.find(r=>normalizePhone(r['Mobile Phone']||'')===a.phone);
     const name = w?(w['First Name']||'')+' '+(w['Last Name']||''):'Phone: '+a.phone;
-    return {...a, companyName: company?.name||(a.company_id?'Unknown':'Unassigned'), name: name.trim()};
+    const master = masterByPhone[a.phone]||{};
+    return {...a, companyName: company?.name||'Unknown', name: name.trim(),
+            hopeful_job: master.hopeful_job, pay_min: master.pay_min, pay_max: master.pay_max};
   });
 
-  // Filter
-  if(compFilter==='UNASSIGNED') rows=rows.filter(r=>!r.company_id);
-  else if(compFilter) rows=rows.filter(r=>r.company_id===compFilter);
+  if(compFilter) rows=rows.filter(r=>r.company_id===compFilter);
   if(statusFilter) rows=rows.filter(r=>r.status===statusFilter);
   if(q) rows=rows.filter(r=>
     r.name.toLowerCase().includes(q)||
     r.phone.includes(q)||
-    (r.companyName||'').toLowerCase().includes(q)||
-    (r.hopeful_job||'').toLowerCase().includes(q)
+    (r.companyName||'').toLowerCase().includes(q)
   );
 
-  // Sort
   rows.sort((a,b)=>{
     let av,bv;
     if(pipeSort.col==='name')    {av=a.name;bv=b.name;}
     else if(pipeSort.col==='company'){av=a.companyName;bv=b.companyName;}
     else if(pipeSort.col==='status'){av=a.status;bv=b.status;}
-    else if(pipeSort.col==='updated'){av=a.updated_at;bv=b.updated_at;}
-    else if(pipeSort.col==='assigned'){av=a.assigned_at;bv=b.assigned_at;}
+    else if(pipeSort.col==='granted'){av=a.granted_at;bv=b.granted_at;}
     else {av='';bv='';}
     if(av<bv)return -1*pipeSort.dir;
     if(av>bv)return  1*pipeSort.dir;
     return 0;
   });
 
-  document.getElementById('pipeCount').textContent = rows.length.toLocaleString()+' assignments';
+  document.getElementById('pipeCount').textContent = rows.length.toLocaleString()+' granted candidates';
   const tbody = document.getElementById('pipeTbody');
   if(!rows.length){
-    tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--muted);font-style:italic;">No assignments found.</td></tr>';
+    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--muted);font-style:italic;">No granted candidates found.</td></tr>';
     return;
   }
   const rejMap = rejInfoByPhone();
+  const payStr = r => (r.pay_min!=null||r.pay_max!=null) ? ('$'+(r.pay_min??'?')+'–$'+(r.pay_max??'?')) : '—';
+  const statusOptsFor = r => STATUSES.map(s=>`<option${s===r.status?' selected':''}>${s}</option>`).join('');
   tbody.innerHTML = rows.map(r=>{
     const rej = rejMap[r.phone]||[];
     const rejTip = 'Rejections:\n'+rej.map(e=>`${e.company_name||'Unknown'} (${timeAgo(e.changed_at)}): ${e.reason||'no reason given'}`).join('\n');
     return `
     <tr>
       <td><span class="pipe-name">${esc(r.name)}</span>${rej.length?`<span class="rej-badge" data-tip="${esc(rejTip)}" onmouseenter="showTip(event,this)" onmouseleave="hideTip()">&#10005; ${rej.length}</span>`:''}<br><span style="font-size:11px;color:var(--muted)">${esc(r.phone)}</span></td>
-      <td><span class="pipe-company" style="${!r.company_id?'color:var(--amber)':''}">${esc(r.companyName)}</span></td>
-      <td><span class="${statusClass(r.status)}">${esc(r.status)||'Not Contacted'}</span>${r.status_changed_at?`<br><span class="pipe-time" style="font-size:10px">${timeAgo(r.status_changed_at)}</span>`:''}</td>
+      <td><span class="pipe-company">${esc(r.companyName)}</span></td>
+      <td><select class="pipe-filter-select" onchange="updatePipelineStatus('${jsAttr(r.id)}',this)">${statusOptsFor(r)}</select>${r.status_changed_at?`<br><span class="pipe-time" style="font-size:10px">${timeAgo(r.status_changed_at)}</span>`:''}</td>
       <td style="font-size:12px">${esc(r.hopeful_job)||'—'}</td>
-      <td style="font-size:12px">${esc(r.pay_scale)||'—'}</td>
-      <td style="font-size:12px">${esc(r.current_job)||'—'}</td>
-      <td class="pipe-notes-cell" title="${esc(r.notes)}">${esc(r.notes)||'—'}</td>
-      <td class="pipe-time">${fmtDate(r.updated_at)}</td>
-      <td class="pipe-time">${fmtDate(r.assigned_at)}<br><span style="font-size:10px;color:var(--muted)">${esc(r.assigned_by)}</span></td>
+      <td style="font-size:12px">${payStr(r)}</td>
+      <td class="pipe-time">${fmtDate(r.granted_at)}<br><span style="font-size:10px;color:var(--muted)">${esc(r.granted_by)}</span></td>
       <td style="white-space:nowrap">
-        ${r.file_url?`<a href="${r.file_url}" target="_blank" style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;color:var(--blue);text-decoration:none;margin-right:6px;">&#128206; View</a>`:''}
-        <label style="font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);padding:2px 7px;border:1px dashed var(--border);border-radius:3px;" title="Upload file for this candidate">
-          &#8679;
-          <input type="file" style="display:none" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onchange="uploadPipelineFile('${jsAttr(r.id)}',this,event)">
-        </label>
-        <span id="pf_${r.id}" style="font-size:10px;color:var(--muted);font-family:'Barlow Condensed',sans-serif;"></span>
-      </td>
-      <td style="white-space:nowrap;display:flex;gap:6px;align-items:center">
-        <button onclick="openPipeEdit('${jsAttr(r.id)}')" style="font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:3px 10px;border:1.5px solid var(--border);background:transparent;color:var(--muted);border-radius:3px;cursor:pointer;white-space:nowrap;transition:all .15s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">&#9998; Edit</button>
-        <button onclick="pipelineUnassign('${jsAttr(r.id)}','${jsAttr(r.name)}','${jsAttr(r.companyName)}',this)" style="font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:3px 10px;border:1.5px solid #f85149;background:transparent;color:#f85149;border-radius:3px;cursor:pointer;white-space:nowrap;transition:all .15s;" onmouseover="this.style.background='#f85149';this.style.color='#fff'" onmouseout="this.style.background='transparent';this.style.color='#f85149'">&#x2715; Unassign</button>
-        ${r.status==='Rejected'&&r.company_id?`<button onclick="pipelineMoveToUnassigned('${jsAttr(r.id)}','${jsAttr(r.name)}','${jsAttr(r.companyName)}',this)" title="Remove this rejected candidate from the company and return them to the Unassigned Pipeline (rejection history is kept)" style="font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:3px 10px;border:1.5px solid var(--amber);background:transparent;color:var(--amber);border-radius:3px;cursor:pointer;white-space:nowrap;transition:all .15s;" onmouseover="this.style.background='var(--amber)';this.style.color='#000'" onmouseout="this.style.background='transparent';this.style.color='var(--amber)'">&#8594; Pool</button>`:''}
+        <button onclick="pipelineUnassign('${jsAttr(r.id)}','${jsAttr(r.name)}','${jsAttr(r.companyName)}',this)" style="font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:3px 10px;border:1.5px solid #f85149;background:transparent;color:#f85149;border-radius:3px;cursor:pointer;white-space:nowrap;transition:all .15s;" onmouseover="this.style.background='#f85149';this.style.color='#fff'" onmouseout="this.style.background='transparent';this.style.color='#f85149'">&#x2715; Revoke Access</button>
       </td>
     </tr>`;}).join('');
 }
 
-// ── PIPELINE EXCEL EXPORT ─────────────────────────────────────────────────────
-async function uploadPipelineFile(id, input, evt){
-  evt.stopPropagation();
-  if(!input.files||!input.files[0])return;
-  const statusEl=document.getElementById('pf_'+id);
-  if(statusEl){statusEl.style.color='var(--muted)';statusEl.textContent='Uploading…';}
-  const row=assignments.find(x=>x.id===id);
-  if(!row){if(statusEl)statusEl.textContent='Not found';return;}
-  const file=input.files[0];
-  const v=validateUploadFile(file);
-  if(!v.ok){if(statusEl){statusEl.style.color='#f85149';statusEl.textContent=v.error;}input.value='';return;}
-  const ext=v.ext;
-  const path=`assignments/${row.phone}_${row.company_id}_${Date.now()}.${ext}`;
-  const {error:upErr}=await sb.storage.from('candidate-files').upload(path,file,{upsert:true});
-  if(upErr){if(statusEl){statusEl.style.color='#f85149';statusEl.textContent='Failed';}return;}
-  const {data:urlData}=sb.storage.from('candidate-files').getPublicUrl(path);
-  const fileUrl=urlData?.publicUrl;
-  await sb.from('candidate_assignments').update({file_url:fileUrl}).eq('id',id);
-  if(statusEl){statusEl.style.color='var(--green)';statusEl.textContent='✓ Uploaded';}
-  await loadCRMData();
+async function updatePipelineStatus(id, sel){
+  const r = assignments.find(x=>x.id===id);
+  const prev = r?.status || 'Not Contacted';
+  const s = sel.value;
+  if(s===prev) return;
+  let reason = null;
+  if(s==='Rejected'){
+    const w = r ? rawWeb.find(row=>normalizePhone(row['Mobile Phone']||'')===r.phone) : null;
+    const name = w ? ((w['First Name']||'')+' '+(w['Last Name']||'')).trim() : '';
+    reason = prompt('Reason for rejecting '+(name||'this candidate')+':');
+    if(reason===null || !reason.trim()){ sel.value=prev; return; }
+  }
+  const {error} = await sb.from('candidate_assignments').update({
+    status:s, rejection_reason: s==='Rejected'?reason:null, status_changed_at:new Date().toISOString()
+  }).eq('id', id);
+  if(error){ sel.value=prev; alert('Could not save status: '+error.message); return; }
+  if(r){ r.status=s; r.rejection_reason=s==='Rejected'?reason:null; r.status_changed_at=new Date().toISOString(); }
   renderPipeline();
 }
 
 async function pipelineUnassign(id, name, company, btn){
-  if(!confirm('Remove ' + name + ' from ' + company + '?')) return;
-  btn.textContent='Removing…';btn.disabled=true;
+  if(!confirm('Revoke ' + company + '’s access to ' + name + '? They’ll need to request access again to see this candidate’s contact info.')) return;
+  btn.textContent='Revoking…';btn.disabled=true;
   const {error} = await sb.from('candidate_assignments').delete().eq('id', id);
-  if(error){ alert('Error: '+error.message); btn.disabled=false; btn.textContent='✕ Unassign'; return; }
-  // Remove row from DOM immediately
+  if(error){ alert('Error: '+error.message); btn.disabled=false; btn.textContent='✕ Revoke Access'; return; }
   btn.closest('tr').remove();
-  await loadCRMData();
-  renderPipeline();
-}
-
-// Move a rejected candidate off a company and back into the Unassigned
-// Pipeline. Their rejection history is kept (status_events is keyed by phone).
-async function pipelineMoveToUnassigned(id, name, company, btn){
-  if(!confirm('Move ' + name + ' from ' + company + ' back to the Unassigned Pipeline? Their rejection history is kept.')) return;
-  const r = assignments.find(x=>x.id===id);
-  if(!r){ alert('Assignment not found — refresh and try again.'); return; }
-  btn.textContent='Moving…';btn.disabled=true;
-  const {data:{user}} = await sb.auth.getUser();
-  // Can't upsert on a null company_id, so delete any existing pool row first
-  // (same pattern as saveToUnassigned), then delete the rejected assignment.
-  await sb.from('candidate_assignments').delete().eq('phone', r.phone).is('company_id', null);
-  const {error:delErr} = await sb.from('candidate_assignments').delete().eq('id', id);
-  if(delErr){ alert('Error: '+delErr.message); btn.disabled=false; btn.textContent='→ Pool'; return; }
-  const {error} = await sb.from('candidate_assignments').insert({
-    phone:        r.phone,
-    company_id:   null,
-    status:       'Not Contacted',
-    hopeful_job:  r.hopeful_job||'',
-    pay_scale:    r.pay_scale||'',
-    current_job:  r.current_job||'',
-    work_history: r.work_history||'',
-    notes:        r.notes||'',
-    file_url:     r.file_url||null,
-    assigned_by:  user?.email || '',
-  });
-  if(error){ alert('Error re-adding to pool: '+error.message); }
   await loadCRMData();
   renderPipeline();
 }
@@ -2947,10 +2905,10 @@ function exportPipelineExcel(){
     const cells=[...tr.querySelectorAll('td')].map(td=>td.innerText.replace(/\n/g,' ').trim());
     return cells;
   });
-  const head=['Candidate','Company','Status','Hopeful Job','Pay Scale','Current Job','Notes','Last Updated','Assigned'];
+  const head=['Candidate','Company','Status','Hopeful Job','Pay Range','Granted'];
   const wb=XLSX.utils.book_new();
   const ws=XLSX.utils.aoa_to_sheet([head,...rows]);
-  ws['!cols']=[{wch:24},{wch:20},{wch:16},{wch:20},{wch:14},{wch:20},{wch:30},{wch:14},{wch:20}];
+  ws['!cols']=[{wch:24},{wch:20},{wch:16},{wch:20},{wch:14},{wch:20}];
   XLSX.utils.book_append_sheet(wb,ws,'Pipeline');
   XLSX.writeFile(wb,'BTW-Pipeline_'+new Date().toISOString().slice(0,10)+'.xlsx');
 }
@@ -3046,108 +3004,6 @@ async function saveBulkAssignment(){
 }
 
 
-// ─── PIPELINE EDIT ───────────────────────────────────────────────────────────
-let pipeEditId = null;
-
-function openPipeEdit(id){
-  const r = assignments.find(x=>x.id===id);
-  if(!r) return;
-  pipeEditId = id;
-  const w = rawWeb.find(row=>normalizePhone(row['Mobile Phone']||'')===r.phone)||{};
-  const name = ((w['First Name']||'')+' '+(w['Last Name']||'')).trim() || ('Phone: '+r.phone);
-  document.getElementById('pipeEditName').textContent = name;
-  // Populate company dropdown
-  const compSel = document.getElementById('pipeEditCompany');
-  compSel.innerHTML = '<option value="">Unassigned Pipeline</option>';
-  companies.forEach(c=>{
-    const o=document.createElement('option');o.value=c.id;o.textContent=c.name;compSel.appendChild(o);
-  });
-  compSel.value = r.company_id || '';
-  document.getElementById('pipeEditStatus').value       = r.status        || 'Not Contacted';
-  document.getElementById('pipeEditHopefulJob').value   = r.hopeful_job   || '';
-  document.getElementById('pipeEditPayScale').value     = r.pay_scale     || '';
-  document.getElementById('pipeEditCurrentJob').value   = r.current_job   || '';
-  document.getElementById('pipeEditWorkHistory').value  = r.work_history  || '';
-  document.getElementById('pipeEditNotes').value        = r.notes         || '';
-  document.getElementById('pipeEditFileName').textContent = '';
-  const exEl = document.getElementById('pipeEditFileExisting');
-  exEl.innerHTML = r.file_url
-    ? `<a href="${r.file_url}" target="_blank" style="color:var(--blue)">&#128206; View current file</a>`
-    : '<span style="color:var(--muted)">No file attached</span>';
-  // Rejection history (all-time, across companies)
-  const histEl = document.getElementById('pipeEditRejHist');
-  if(histEl){
-    const rej = (rejInfoByPhone()[r.phone])||[];
-    histEl.style.display = rej.length ? 'block' : 'none';
-    histEl.innerHTML = rej.length
-      ? '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#cf222e;margin-bottom:6px;">Rejection History ('+rej.length+')</div>'
-        + rej.map(e=>`<div style="font-size:12px;font-family:'Barlow',sans-serif;color:var(--text);padding:5px 8px;background:rgba(248,81,73,.07);border-left:2px solid rgba(248,81,73,.5);border-radius:3px;margin-bottom:4px;line-height:1.4;"><b>${esc(e.company_name||'Unknown')}</b> <span style="color:var(--muted)">— ${timeAgo(e.changed_at)}</span><br>${esc(e.reason)||'<i style="color:var(--muted)">no reason given</i>'}</div>`).join('')
-      : '';
-  }
-  document.getElementById('pipeEditMsg').textContent = '';
-  document.getElementById('pipeEditOverlay').classList.add('open');
-}
-
-function closePipeEdit(e){
-  if(e && e.target !== document.getElementById('pipeEditOverlay')) return;
-  document.getElementById('pipeEditOverlay').classList.remove('open');
-  pipeEditId = null;
-}
-
-function onPipeEditFileChange(input){
-  const el = document.getElementById('pipeEditFileName');
-  el.textContent = input.files && input.files[0] ? input.files[0].name : '';
-  el.style.color = 'var(--green)';
-}
-
-async function savePipeEdit(){
-  if(!pipeEditId) return;
-  const msg = document.getElementById('pipeEditMsg');
-  msg.style.color = 'var(--muted)'; msg.textContent = 'Saving\u2026';
-
-  const r = assignments.find(x=>x.id===pipeEditId);
-  let fileUrl = r?.file_url || null;
-
-  // Handle optional new file upload
-  const fileInput = document.getElementById('pipeEditFile');
-  if(fileInput && fileInput.files && fileInput.files[0]){
-    const file = fileInput.files[0];
-    const v = validateUploadFile(file);
-    if(!v.ok){ msg.style.color='#f85149'; msg.textContent=v.error; return; }
-    const ext  = v.ext;
-    const path = `assignments/${r.phone}_${r.company_id}_${Date.now()}.${ext}`;
-    const {error:upErr} = await sb.storage.from('candidate-files').upload(path, file, {upsert:true});
-    if(upErr){ msg.style.color='#f85149'; msg.textContent='File upload failed: '+upErr.message; return; }
-    const {data:urlData} = sb.storage.from('candidate-files').getPublicUrl(path);
-    fileUrl = urlData?.publicUrl || fileUrl;
-  }
-
-  const newCompanyId = document.getElementById('pipeEditCompany').value || null;
-  const newStatus = document.getElementById('pipeEditStatus').value;
-  const updates = {
-    company_id:   newCompanyId,
-    status:       newStatus,
-    // clear a stale company-typed reason if staff move the status off Rejected
-    ...(newStatus!=='Rejected' ? {rejection_reason:null} : {}),
-    hopeful_job:  document.getElementById('pipeEditHopefulJob').value.trim(),
-    pay_scale:    document.getElementById('pipeEditPayScale').value.trim(),
-    current_job:  document.getElementById('pipeEditCurrentJob').value.trim(),
-    work_history: document.getElementById('pipeEditWorkHistory').value.trim(),
-    notes:        document.getElementById('pipeEditNotes').value.trim(),
-    file_url:     fileUrl,
-  };
-
-  const {error} = await sb.from('candidate_assignments').update(updates).eq('id', pipeEditId);
-  if(error){ msg.style.color='#f85149'; msg.textContent='Error: '+error.message; return; }
-
-  msg.style.color = 'var(--green)'; msg.textContent = '\u2713 Saved!';
-  await loadCRMData();
-  renderPipeline();
-  setTimeout(()=>{
-    document.getElementById('pipeEditOverlay').classList.remove('open');
-    pipeEditId = null;
-  }, 700);
-}
 
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -3508,7 +3364,6 @@ async function bulkAddToUnassigned(){
   <div class="pipe-toolbar">
     <select class="pipe-filter-select" id="pipeCompanyFilter" onchange="renderPipeline()">
       <option value="">All Companies</option>
-      <option value="UNASSIGNED">&#9632; Unassigned Pipeline</option>
     </select>
     <select class="pipe-filter-select" id="pipeStatusFilter" onchange="renderPipeline()">
       <option value="">All Statuses</option>
@@ -3519,7 +3374,7 @@ async function bulkAddToUnassigned(){
       <option>Hired</option>
       <option>Rejected</option>
     </select>
-    <input class="pipe-search" id="pipeSearch" placeholder="Search name / phone…" oninput="renderPipeline()">
+    <input class="pipe-search" id="pipeSearch" placeholder="Search name / phone / company…" oninput="renderPipeline()">
     <span class="pipe-count" id="pipeCount"></span>
     <button class="pipe-export-btn" onclick="exportPipelineExcel()">&#8681; Excel</button>
   </div>
@@ -3530,12 +3385,8 @@ async function bulkAddToUnassigned(){
         <th onclick="pipeSortBy('company')">Company &#8597;</th>
         <th onclick="pipeSortBy('status')">Status &#8597;</th>
         <th>Hopeful Job</th>
-        <th>Pay Scale</th>
-        <th>Current Job</th>
-        <th>Notes</th>
-        <th onclick="pipeSortBy('updated')">Last Updated &#8597;</th>
-        <th onclick="pipeSortBy('assigned')">Assigned &#8597;</th>
-        <th>File</th>
+        <th>Pay Range</th>
+        <th onclick="pipeSortBy('granted')">Granted &#8597;</th>
         <th></th>
       </tr></thead>
       <tbody id="pipeTbody"></tbody>
@@ -3802,75 +3653,6 @@ async function bulkAddToUnassigned(){
   </div>
 </div>
 
-
-<!-- ══ PIPELINE EDIT MODAL ══ -->
-<div class="assign-overlay" id="pipeEditOverlay" onclick="closePipeEdit(event)">
-  <div class="assign-modal">
-    <div class="assign-header">
-      <div>
-        <div class="assign-title">Edit Candidate</div>
-        <div class="assign-name" id="pipeEditName"></div>
-      </div>
-      <button class="assign-close" onclick="closePipeEdit()">&#x2715;</button>
-    </div>
-    <div class="assign-body">
-      <div class="assign-field">
-        <label class="assign-label">Company <span style="font-size:10px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">(change to assign to a company)</span></label>
-        <select class="assign-input assign-select" id="pipeEditCompany">
-          <option value="">Unassigned Pipeline</option>
-        </select>
-      </div>
-      <div class="assign-field">
-        <label class="assign-label">Status</label>
-        <select class="assign-input assign-select" id="pipeEditStatus">
-          <option>Not Contacted</option>
-          <option>Contacted</option>
-          <option>Interviewed</option>
-          <option>Offered</option>
-          <option>Hired</option>
-          <option>Rejected</option>
-        </select>
-      </div>
-      <div id="pipeEditRejHist" style="display:none;margin-bottom:14px;"></div>
-      <div class="assign-field">
-        <label class="assign-label">Hopeful Job</label>
-        <input class="assign-input" id="pipeEditHopefulJob" placeholder="e.g. CDL Driver, Welder&hellip;">
-      </div>
-      <div class="assign-field">
-        <label class="assign-label">Pay Scale</label>
-        <input class="assign-input" id="pipeEditPayScale" placeholder="e.g. $22-28/hr, $55k&hellip;">
-      </div>
-      <div class="assign-field">
-        <label class="assign-label">Current Job</label>
-        <input class="assign-input" id="pipeEditCurrentJob" placeholder="e.g. Warehouse Associate&hellip;">
-      </div>
-      <div class="assign-field">
-        <label class="assign-label">Work History</label>
-        <textarea class="assign-textarea" id="pipeEditWorkHistory" placeholder="Previous employers, roles, years of experience&hellip;" style="min-height:80px"></textarea>
-      </div>
-      <div class="assign-field">
-        <label class="assign-label">Notes</label>
-        <textarea class="assign-textarea" id="pipeEditNotes" placeholder="Notes about this candidate&hellip;"></textarea>
-      </div>
-      <div class="assign-field">
-        <label class="assign-label">Attachment <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);font-family:'Barlow',sans-serif;font-size:11px">(replace existing file)</span></label>
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-          <label style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:6px 14px;border:1.5px dashed var(--border);border-radius:4px;cursor:pointer;color:var(--muted);">
-            &#8679; Choose File
-            <input type="file" id="pipeEditFile" style="display:none" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onchange="onPipeEditFileChange(this)">
-          </label>
-          <span id="pipeEditFileName" style="font-size:11px;color:var(--muted);font-family:'Barlow Condensed',sans-serif;"></span>
-          <span id="pipeEditFileExisting" style="font-size:11px;font-family:'Barlow Condensed',sans-serif;"></span>
-        </div>
-      </div>
-    </div>
-    <div class="assign-footer">
-      <button class="assign-cancel" onclick="closePipeEdit()">Cancel</button>
-      <span class="assign-msg" id="pipeEditMsg"></span>
-      <button class="assign-save" onclick="savePipeEdit()">&#10003; Save Changes</button>
-    </div>
-  </div>
-</div>
 
 
 <!-- ══ GEOCODE TOOL MODAL ══ -->
