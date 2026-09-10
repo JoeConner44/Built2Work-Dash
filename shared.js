@@ -13,7 +13,19 @@ const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 const MAPBOX_TOKEN  = 'pk.eyJ1Ijoiam9lLWNvbm5lciIsImEiOiJjbXFmYnViNGUxa3VnMnhxMGFxYTl3cmduIn0.Dk4qRQ9eQx1DtBcnPgDtdg';
 
 const { createClient } = supabase;
-const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
+
+/* Each portal keeps its own isolated login. Supabase's client persists the
+ * session to localStorage under one fixed key by default, and localStorage
+ * is shared by every tab on the same site — so without this, signing into
+ * the customer portal in one tab silently signs the staff dashboard out in
+ * another (and vice versa), because both pages share this same file and
+ * would otherwise fight over the same stored session. */
+const PORTAL = location.pathname.includes('customer.html') ? 'customer'
+             : location.pathname.includes('operations.html') ? 'operations'
+             : 'staff';
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON, {
+  auth: { storageKey: 'btw-auth-' + PORTAL }
+});
 
 /* Phone normalizer: strip non-digits, drop a leading country-code "1", keep the
  * last 9 digits. Handles float-formatted CSV values like "1234567890.0". This
