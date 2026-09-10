@@ -2547,6 +2547,8 @@ function pipeSortBy(col){
 // status — the Unassigned/master rows now live entirely in the Follow-Up
 // tab, and hopeful_job/pay range are read-only here (pulled from that same
 // master row) since they're shared across every company, not per-company.
+let pipeSelected = new Set(); // candidate_assignments.id values selected in the Pipeline tab
+
 function renderPipeline(){
   const compFilter   = document.getElementById('pipeCompanyFilter')?.value  || '';
   const statusFilter = document.getElementById('pipeStatusFilter')?.value   || '';
@@ -2587,7 +2589,9 @@ function renderPipeline(){
   document.getElementById('pipeCount').textContent = rows.length.toLocaleString()+' granted candidates';
   const tbody = document.getElementById('pipeTbody');
   if(!rows.length){
-    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--muted);font-style:italic;">No granted candidates found.</td></tr>';
+    tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--muted);font-style:italic;">No granted candidates found.</td></tr>';
+    updatePipeBulkBar();
+    const selAll=document.getElementById('pipeSelectAll'); if(selAll) selAll.checked=false;
     return;
   }
   const rejMap = rejInfoByPhone();
@@ -2598,6 +2602,7 @@ function renderPipeline(){
     const rejTip = 'Rejections:\n'+rej.map(e=>`${e.company_name||'Unknown'} (${timeAgo(e.changed_at)}): ${e.reason||'no reason given'}`).join('\n');
     return `
     <tr>
+      <td><input type="checkbox" data-id="${jsAttr(r.id)}" ${pipeSelected.has(r.id)?'checked':''} onchange="togglePipeSelect('${jsAttr(r.id)}',this.checked)"></td>
       <td><span class="pipe-name">${esc(r.name)}</span>${rej.length?`<span class="rej-badge" data-tip="${esc(rejTip)}" onmouseenter="showTip(event,this)" onmouseleave="hideTip()">&#10005; ${rej.length}</span>`:''}<br><span style="font-size:11px;color:var(--muted)">${esc(r.phone)}</span></td>
       <td><span class="pipe-company">${esc(r.companyName)}</span></td>
       <td><select class="pipe-filter-select" onchange="updatePipelineStatus('${jsAttr(r.id)}',this)">${statusOptsFor(r)}</select>${r.status_changed_at?`<br><span class="pipe-time" style="font-size:10px">${timeAgo(r.status_changed_at)}</span>`:''}</td>
@@ -2608,6 +2613,44 @@ function renderPipeline(){
         <button onclick="pipelineUnassign('${jsAttr(r.id)}','${jsAttr(r.name)}','${jsAttr(r.companyName)}',this)" style="font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:3px 10px;border:1.5px solid #f85149;background:transparent;color:#f85149;border-radius:3px;cursor:pointer;white-space:nowrap;transition:all .15s;" onmouseover="this.style.background='#f85149';this.style.color='#fff'" onmouseout="this.style.background='transparent';this.style.color='#f85149'">&#x2715; Revoke Access</button>
       </td>
     </tr>`;}).join('');
+  const selAll=document.getElementById('pipeSelectAll');
+  if(selAll) selAll.checked = rows.length>0 && rows.every(r=>pipeSelected.has(r.id));
+  updatePipeBulkBar();
+}
+
+function togglePipeSelect(id, checked){
+  if(checked) pipeSelected.add(id); else pipeSelected.delete(id);
+  updatePipeBulkBar();
+  const selAll=document.getElementById('pipeSelectAll');
+  if(selAll){
+    const boxes=[...document.querySelectorAll('#pipeTbody input[type=checkbox][data-id]')];
+    selAll.checked = boxes.length>0 && boxes.every(b=>pipeSelected.has(b.dataset.id));
+  }
+}
+function togglePipeSelectAll(cb){
+  const ids = [...document.querySelectorAll('#pipeTbody input[type=checkbox][data-id]')].map(el=>el.dataset.id);
+  if(cb.checked) ids.forEach(id=>pipeSelected.add(id));
+  else ids.forEach(id=>pipeSelected.delete(id));
+  renderPipeline();
+}
+function updatePipeBulkBar(){
+  const n = pipeSelected.size;
+  const btn = document.getElementById('pipeBulkRevokeBtn');
+  if(btn){ btn.style.display = n?'inline-block':'none'; btn.textContent = `✕ Revoke Selected (${n})`; }
+}
+
+async function bulkRevokeSelected(){
+  const ids = [...pipeSelected];
+  if(!ids.length) return;
+  const rows = ids.map(id=>assignments.find(a=>a.id===id)).filter(Boolean);
+  const companyCount = new Set(rows.map(r=>r.company_id)).size;
+  const msg = `Revoke access for ${ids.length} candidate${ids.length===1?'':'s'} across ${companyCount} compan${companyCount===1?'y':'ies'}? They'll need to request access again to see these candidates' contact info.`;
+  if(!confirm(msg)) return;
+  const {error} = await sb.from('candidate_assignments').delete().in('id', ids);
+  if(error){ alert('Error: '+error.message); return; }
+  pipeSelected.clear();
+  await loadCRMData();
+  renderPipeline();
 }
 
 async function updatePipelineStatus(id, sel){
@@ -2635,6 +2678,7 @@ async function pipelineUnassign(id, name, company, btn){
   btn.textContent='Revoking…';btn.disabled=true;
   const {error} = await sb.from('candidate_assignments').delete().eq('id', id);
   if(error){ alert('Error: '+error.message); btn.disabled=false; btn.textContent='✕ Revoke Access'; return; }
+  pipeSelected.delete(id);
   btn.closest('tr').remove();
   await loadCRMData();
   renderPipeline();
@@ -2646,6 +2690,8 @@ function updateRequestsBadge(){
   const b = document.getElementById('requestsBadge');
   if(b){ b.textContent=n; b.style.display=n?'inline-block':'none'; }
 }
+
+let requestsSelected = new Set(); // candidate_assignments.id values selected in Access Requests
 
 function renderRequests(){
   updateRequestsBadge();
@@ -2659,11 +2705,14 @@ function renderRequests(){
   document.getElementById('requestsCount').textContent = rows.length.toLocaleString()+' pending';
   const tbody = document.getElementById('requestsTbody');
   if(!rows.length){
-    tbody.innerHTML='<tr><td colspan="4" style="text-align:center;padding:40px;color:var(--muted);font-style:italic;">No pending requests.</td></tr>';
+    tbody.innerHTML='<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--muted);font-style:italic;">No pending requests.</td></tr>';
+    updateRequestsBulkBar();
+    const selAll=document.getElementById('requestsSelectAll'); if(selAll) selAll.checked=false;
     return;
   }
   tbody.innerHTML = rows.map(r=>`
     <tr>
+      <td><input type="checkbox" data-id="${jsAttr(r.id)}" ${requestsSelected.has(r.id)?'checked':''} onchange="toggleRequestSelect('${jsAttr(r.id)}',this.checked)"></td>
       <td><span class="pipe-name">${esc(r.name)}</span><br><span style="font-size:11px;color:var(--muted)">${esc(r.phone)}</span></td>
       <td>${esc(r.companyName)}</td>
       <td class="pipe-time">${timeAgo(r.requested_at)}</td>
@@ -2672,6 +2721,45 @@ function renderRequests(){
         <button onclick="denyRequest('${jsAttr(r.id)}','${jsAttr(r.name)}')" style="font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:4px 12px;border:1.5px solid #f85149;background:transparent;color:#f85149;border-radius:3px;cursor:pointer;" onmouseover="this.style.background='#f85149';this.style.color='#fff'" onmouseout="this.style.background='transparent';this.style.color='#f85149'">&#x2715; Deny</button>
       </td>
     </tr>`).join('');
+  const selAll=document.getElementById('requestsSelectAll');
+  if(selAll) selAll.checked = rows.length>0 && rows.every(r=>requestsSelected.has(r.id));
+  updateRequestsBulkBar();
+}
+
+function toggleRequestSelect(id, checked){
+  if(checked) requestsSelected.add(id); else requestsSelected.delete(id);
+  updateRequestsBulkBar();
+  const selAll=document.getElementById('requestsSelectAll');
+  if(selAll){
+    const boxes=[...document.querySelectorAll('#requestsTbody input[type=checkbox][data-id]')];
+    selAll.checked = boxes.length>0 && boxes.every(b=>requestsSelected.has(b.dataset.id));
+  }
+}
+function toggleRequestSelectAll(cb){
+  const ids = [...document.querySelectorAll('#requestsTbody input[type=checkbox][data-id]')].map(el=>el.dataset.id);
+  if(cb.checked) ids.forEach(id=>requestsSelected.add(id));
+  else ids.forEach(id=>requestsSelected.delete(id));
+  renderRequests();
+}
+function updateRequestsBulkBar(){
+  const n = requestsSelected.size;
+  const btn = document.getElementById('requestsBulkDenyBtn');
+  if(btn){ btn.style.display = n?'inline-block':'none'; btn.textContent = `✕ Deny Selected (${n})`; }
+}
+
+async function bulkDenySelected(){
+  const ids = [...requestsSelected];
+  if(!ids.length) return;
+  const reasonRaw = prompt(`Reason for denying these ${ids.length} request${ids.length===1?'':'s'} (optional, internal only):`);
+  if(reasonRaw === null) return; // cancelled
+  if(!confirm(`Deny ${ids.length} pending request${ids.length===1?'':'s'}?`)) return;
+  const {error} = await sb.from('candidate_assignments').update({
+    request_status:'denied', denied_at:new Date().toISOString(), denial_reason:reasonRaw
+  }).in('id', ids);
+  if(error){ alert('Error: '+error.message); return; }
+  requestsSelected.clear();
+  await loadCRMData();
+  renderRequests();
 }
 
 async function approveRequest(id){
@@ -2681,6 +2769,7 @@ async function approveRequest(id){
     denied_at:null, denial_reason:null, status:'Not Contacted'
   }).eq('id',id);
   if(error){ alert('Error: '+error.message); return; }
+  requestsSelected.delete(id);
   await loadCRMData();
   renderRequests();
 }
@@ -2691,6 +2780,7 @@ async function denyRequest(id,name){
     request_status:'denied', denied_at:new Date().toISOString(), denial_reason:reason
   }).eq('id',id);
   if(error){ alert('Error: '+error.message); return; }
+  requestsSelected.delete(id);
   await loadCRMData();
   renderRequests();
 }
@@ -2908,7 +2998,8 @@ async function saveFollowupEdit(){
 function exportPipelineExcel(){
   if(typeof XLSX==='undefined'){alert('Excel library loading.');return;}
   const rows=[...document.querySelectorAll('#pipeTbody tr')].map(tr=>{
-    const cells=[...tr.querySelectorAll('td')].map(td=>td.innerText.replace(/\n/g,' ').trim());
+    // First <td> is the bulk-select checkbox column — skip it, it has no text.
+    const cells=[...tr.querySelectorAll('td')].slice(1).map(td=>td.innerText.replace(/\n/g,' ').trim());
     return cells;
   });
   const head=['Candidate','Company','Status','Hopeful Job','Pay Range','Granted'];
@@ -3382,11 +3473,13 @@ async function bulkAddToUnassigned(){
     </select>
     <input class="pipe-search" id="pipeSearch" placeholder="Search name / phone / company…" oninput="renderPipeline()">
     <span class="pipe-count" id="pipeCount"></span>
+    <button id="pipeBulkRevokeBtn" onclick="bulkRevokeSelected()" style="display:none;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:6px 14px;border:1.5px solid #f85149;background:transparent;color:#f85149;border-radius:3px;cursor:pointer;">&#x2715; Revoke Selected</button>
     <button class="pipe-export-btn" onclick="exportPipelineExcel()">&#8681; Excel</button>
   </div>
   <div class="pipe-table-wrap">
     <table class="pipe-tbl">
       <thead><tr>
+        <th style="cursor:default"><input type="checkbox" id="pipeSelectAll" onchange="togglePipeSelectAll(this)" title="Select all visible"></th>
         <th onclick="pipeSortBy('name')">Candidate &#8597;</th>
         <th onclick="pipeSortBy('company')">Company &#8597;</th>
         <th onclick="pipeSortBy('status')">Status &#8597;</th>
@@ -3437,11 +3530,13 @@ async function bulkAddToUnassigned(){
 <div id="requestsPanel" style="display:none;flex:1;overflow-y:auto;flex-direction:column;">
   <div class="pipe-toolbar">
     <span class="pipe-count" id="requestsCount"></span>
+    <button id="requestsBulkDenyBtn" onclick="bulkDenySelected()" style="display:none;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:6px 14px;border:1.5px solid #f85149;background:transparent;color:#f85149;border-radius:3px;cursor:pointer;">&#x2715; Deny Selected</button>
     <button class="pipe-export-btn" onclick="openGrantModal()">+ Grant Access</button>
   </div>
   <div class="pipe-table-wrap">
     <table class="pipe-tbl">
       <thead><tr>
+        <th style="cursor:default"><input type="checkbox" id="requestsSelectAll" onchange="toggleRequestSelectAll(this)" title="Select all visible"></th>
         <th>Candidate</th>
         <th>Requesting Company</th>
         <th>Requested</th>
