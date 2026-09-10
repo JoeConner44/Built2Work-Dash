@@ -2221,12 +2221,18 @@ function rejInfoByPhone(){
 // ── Load CRM data alongside main data ────────────────────────────────────────
 async function loadCRMData(){
   try{
-    const [compRes, assRes] = await Promise.all([
+    // candidate_assignments now runs into the thousands (every Yes/Maybe
+    // candidate gets a Follow-Up row) — a plain unpaginated select silently
+    // caps at Supabase's default 1000-row limit, which made the app think
+    // rows past #1000 didn't exist (duplicate-key errors re-seeding Follow-Up,
+    // incomplete Pipeline/Access Requests lists). fetchAll() pages through
+    // all of it the same way index.html's own big tables already do.
+    const [compRes, assData] = await Promise.all([
       sb.from('companies').select('*').order('name'),
-      sb.from('candidate_assignments').select('*').order('updated_at', {ascending:false})
+      fetchAll('candidate_assignments','*')
     ]);
     if(!compRes.error) companies = compRes.data || [];
-    if(!assRes.error)  assignments = assRes.data || [];
+    assignments = assData || [];
     // Populate pipeline company filter
     const cf = document.getElementById('pipeCompanyFilter');
     if(cf){
