@@ -121,7 +121,7 @@ tr:hover td{background:var(--surface2);}
 .chip:hover{border-color:var(--accent);color:var(--accent);}
 .chip.active{background:var(--accent);border-color:var(--accent);color:#fff;}
 
-/* ── CUSTOMER TAB BAR (Search / Recruiting Pipeline) ── */
+/* ── CUSTOMER TAB BAR (Search / Access Granted) ── */
 .cust-tab-bar{display:flex;background:#ffffff;border-bottom:1px solid var(--border);padding:0 20px;flex-shrink:0;}
 .cust-tab{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:11px 18px;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;margin-bottom:-1px;}
 .cust-tab.active{border-bottom-color:var(--accent);color:var(--accent);}
@@ -144,7 +144,7 @@ tr:hover td{background:var(--surface2);}
   </header>
   <div class="cust-tab-bar" id="custTabBar">
     <button class="cust-tab active" id="tabSearch" onclick="switchCustomerTab('search')">&#128269; Search</button>
-    <button class="cust-tab" id="tabPipeline" onclick="switchCustomerTab('pipeline')">&#128203; Recruiting Pipeline <span id="pipelineBadge" class="cust-tab-badge" style="display:none">0</span></button>
+    <button class="cust-tab" id="tabPipeline" onclick="switchCustomerTab('pipeline')">&#128203; Access Granted <span id="pipelineBadge" class="cust-tab-badge" style="display:none">0</span></button>
   </div>
 
   <div id="searchPanel" style="display:flex;flex-direction:column;">
@@ -593,7 +593,7 @@ function triviaCellStr(r){
 
 function renderCandidates(){
   const q=document.getElementById('searchBox').value.toLowerCase().trim();
-  // Granted candidates move to the Recruiting Pipeline tab — Search is only
+  // Granted candidates move to the Access Granted tab — Search is only
   // ever for finding and requesting new ones.
   let rows=directory.filter(r=>(r.request||{}).request_status!=='granted');
   const testMode=!!filters.triviaTest;       // one specific test chosen
@@ -699,7 +699,7 @@ function updatePipelineBadge(){
   if(b){ b.textContent=n; b.style.display=n?'inline-block':'none'; }
 }
 
-// Recruiting Pipeline: every candidate this company has been granted access
+// Access Granted: every candidate this company has been granted access
 // to — full contact info plus the hiring-status tracker.
 function renderPipeline(){
   const q=(document.getElementById('pipeSearchBox')?.value||'').toLowerCase().trim();
@@ -722,7 +722,7 @@ function renderPipeline(){
 
   document.getElementById('pipeCountLabel').textContent=rows.length.toLocaleString()+' candidates';
   const tbody=document.getElementById('pipeTbody');
-  if(!rows.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--muted);font-style:italic;">No candidates in your pipeline yet — request access to someone in the Search tab.</td></tr>';return;}
+  if(!rows.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--muted);font-style:italic;">No candidates here yet — request access to someone in the Search tab.</td></tr>';return;}
 
   tbody.innerHTML=rows.map(r=>{
     const g=grantedData[r.key];
