@@ -2639,6 +2639,19 @@ function updatePipeBulkBar(){
   if(btn){ btn.style.display = n?'inline-block':'none'; btn.textContent = `✕ Revoke Selected (${n})`; }
 }
 
+// .in('id', ids) puts every id straight into the request URL — fine for a
+// handful, but a few hundred+ UUIDs blows past the server's URL length
+// limit ("Bad Request"). Batching keeps each request small regardless of
+// how many rows are selected.
+async function batchedRequest(ids, batchSize, fn){
+  for(let i=0;i<ids.length;i+=batchSize){
+    const chunk = ids.slice(i, i+batchSize);
+    const {error} = await fn(chunk);
+    if(error) return error;
+  }
+  return null;
+}
+
 async function bulkRevokeSelected(){
   const ids = [...pipeSelected];
   if(!ids.length) return;
@@ -2646,8 +2659,13 @@ async function bulkRevokeSelected(){
   const companyCount = new Set(rows.map(r=>r.company_id)).size;
   const msg = `Revoke access for ${ids.length} candidate${ids.length===1?'':'s'} across ${companyCount} compan${companyCount===1?'y':'ies'}? They'll need to request access again to see these candidates' contact info.`;
   if(!confirm(msg)) return;
-  const {error} = await sb.from('candidate_assignments').delete().in('id', ids);
-  if(error){ alert('Error: '+error.message); return; }
+  const btn = document.getElementById('pipeBulkRevokeBtn');
+  if(btn){ btn.disabled=true; btn.textContent='Revoking…'; }
+  const error = await batchedRequest(ids, 100, chunk =>
+    sb.from('candidate_assignments').delete().in('id', chunk)
+  );
+  if(btn) btn.disabled=false;
+  if(error){ alert('Error: '+error.message+'\n\nSome candidates may already be revoked — check the list before retrying.'); await loadCRMData(); renderPipeline(); return; }
   pipeSelected.clear();
   await loadCRMData();
   renderPipeline();
@@ -2753,10 +2771,15 @@ async function bulkDenySelected(){
   const reasonRaw = prompt(`Reason for denying these ${ids.length} request${ids.length===1?'':'s'} (optional, internal only):`);
   if(reasonRaw === null) return; // cancelled
   if(!confirm(`Deny ${ids.length} pending request${ids.length===1?'':'s'}?`)) return;
-  const {error} = await sb.from('candidate_assignments').update({
-    request_status:'denied', denied_at:new Date().toISOString(), denial_reason:reasonRaw
-  }).in('id', ids);
-  if(error){ alert('Error: '+error.message); return; }
+  const btn = document.getElementById('requestsBulkDenyBtn');
+  if(btn){ btn.disabled=true; btn.textContent='Denying…'; }
+  const error = await batchedRequest(ids, 100, chunk =>
+    sb.from('candidate_assignments').update({
+      request_status:'denied', denied_at:new Date().toISOString(), denial_reason:reasonRaw
+    }).in('id', chunk)
+  );
+  if(btn) btn.disabled=false;
+  if(error){ alert('Error: '+error.message+'\n\nSome requests may already be denied — check the list before retrying.'); await loadCRMData(); renderRequests(); return; }
   requestsSelected.clear();
   await loadCRMData();
   renderRequests();
