@@ -2275,7 +2275,7 @@ function switchPipeTab(tab){
   } else if(tab==='requests'){
     loadCRMData().then(renderRequests);
   } else if(tab==='followup'){
-    loadCRMData().then(()=>seedFollowupRows().then(renderFollowup));
+    loadLeadsData().then(()=>seedFollowupRows().then(renderFollowup));
   }
 }
 
@@ -2829,6 +2829,17 @@ async function seedFollowupRows(){
     seen.add(phone);
     missing.push({phone, company_id:null});
   });
+  // Internet Leads (Google Sheet import) — same dedup-by-phone, gated to
+  // people who opted in, tagged lead_source so candidate_directory_followup
+  // (the customer-facing blinded browse list) keeps excluding them: these
+  // only reach a company when staff directly assign them from the Leads tab.
+  rawLeads.forEach(r=>{
+    if((r['Opt In']||'').trim()!=='Yes, I opt In') return;
+    const phone = normalizePhone(r['Phone']||'');
+    if(!phone || existingPhones.has(phone) || seen.has(phone)) return;
+    seen.add(phone);
+    missing.push({phone, company_id:null, lead_source:'internet_lead'});
+  });
   if(!missing.length) return;
   // Best-effort: a concurrent load from another staff session can race this
   // insert against the partial unique index on (phone) WHERE company_id IS
@@ -2853,8 +2864,10 @@ function renderFollowup(){
   const today = new Date().toISOString().slice(0,10);
   let rows = assignments.filter(a=>!a.company_id).map(a=>{
     const w = rawWeb.find(r=>normalizePhone(r['Mobile Phone']||'')===a.phone);
-    const name = w ? ((w['First Name']||'')+' '+(w['Last Name']||'')).trim() : '';
-    return {...a, name: name || ('Phone: '+a.phone), email: w?(w['Email Address']||''):''};
+    const l = !w ? rawLeads.find(r=>normalizePhone(r['Phone']||'')===a.phone) : null;
+    const name = w ? ((w['First Name']||'')+' '+(w['Last Name']||'')).trim() : (l ? (l['Name']||'').trim() : '');
+    const email = w ? (w['Email Address']||'') : (l ? (l['Email']||'') : '');
+    return {...a, name: name || ('Phone: '+a.phone), email};
   });
   if(dispFilter) rows = rows.filter(r=>(r.interest_disposition||'')===dispFilter);
   if(q) rows = rows.filter(r=> r.name.toLowerCase().includes(q) || r.phone.includes(q) || r.email.toLowerCase().includes(q));
@@ -2965,7 +2978,8 @@ function openFollowupEdit(id){
   if(!a) return;
   followupEditId = id; followupEditFile=null;
   const w = rawWeb.find(r=>normalizePhone(r['Mobile Phone']||'')===a.phone);
-  const name = w ? ((w['First Name']||'')+' '+(w['Last Name']||'')).trim() : ('Phone: '+a.phone);
+  const l = !w ? rawLeads.find(r=>normalizePhone(r['Phone']||'')===a.phone) : null;
+  const name = w ? ((w['First Name']||'')+' '+(w['Last Name']||'')).trim() : (l ? (l['Name']||'').trim() : ('Phone: '+a.phone));
   document.getElementById('followupEditName').textContent = name;
   document.getElementById('fuHopefulJob').value = a.hopeful_job||'';
   document.getElementById('fuPayMin').value = a.pay_min ?? '';
