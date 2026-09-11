@@ -1,12 +1,11 @@
 // supabase/functions/sync-internet-leads/index.ts
 //
-// Pulls the Internet Leads Google Sheet and mirrors it into the
+// Pulls the Internet Leads Google Sheet — via a Google Apps Script Web App
+// deployed from inside the sheet itself, see
+// google-apps-script/internet-leads-webapp.gs — and mirrors it into the
 // "Internet Leads" Supabase table. Runs a few times a day (see
-// supabase-internet-leads-sync-cron.sql for the schedule).
-//
-// Authenticates as a Google service account (JWT Bearer flow) — a personal
-// Google login can't be used for an unattended cron job. The sheet must be
-// shared with the service account's client_email as a Viewer.
+// supabase-internet-leads-sync-cron.sql for the schedule). No Google Cloud
+// project, service account, or billing involved.
 //
 // This table has no staff-editable fields of its own (all Follow-Up
 // tracking lives on candidate_assignments, keyed by phone — see
@@ -15,8 +14,10 @@
 // constraint on this table and matches "mirror of the sheet" semantics.
 //
 // Deploy: `supabase functions deploy sync-internet-leads`
-// Secrets this function needs (set once, not committed anywhere):
-//   supabase secrets set GOOGLE_SERVICE_ACCOUNT_KEY='<the full service-account JSON key, as one line>'
+// Secrets this function needs (set once, not committed anywhere — see
+// google-apps-script/internet-leads-webapp.gs for how to get these values):
+//   supabase secrets set INTERNET_LEADS_WEBAPP_URL='<the Apps Script Web app URL>'
+//   supabase secrets set INTERNET_LEADS_SYNC_TOKEN='<the SECRET_TOKEN from that script>'
 // SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are provided automatically to
 // every Edge Function — do not set those yourself.
 
@@ -25,119 +26,39 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const GOOGLE_KEY_RAW = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_KEY');
-
-const SPREADSHEET_ID = '1Kjamq-PizJEWT74_ai614tROfJFhrAiRuqszFkfrnrI';
-const SHEET_GID = 59329832; // stable even if the tab is renamed later
-
-function base64UrlEncode(bytes: ArrayBuffer | Uint8Array): string {
-  const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-  let str = '';
-  for (const b of arr) str += String.fromCharCode(b);
-  return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-function pemToDer(pem: string): ArrayBuffer {
-  const clean = pem
-    .replace(/-----BEGIN PRIVATE KEY-----/, '')
-    .replace(/-----END PRIVATE KEY-----/, '')
-    .replace(/\s+/g, '');
-  const raw = atob(clean);
-  const bytes = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-  return bytes.buffer;
-}
-
-async function getAccessToken(): Promise<string> {
-  const key = JSON.parse(GOOGLE_KEY_RAW!);
-  const now = Math.floor(Date.now() / 1000);
-  const header = { alg: 'RS256', typ: 'JWT' };
-  const claims = {
-    iss: key.client_email,
-    scope: 'https://www.googleapis.com/auth/spreadsheets.readonly',
-    aud: key.token_uri || 'https://oauth2.googleapis.com/token',
-    iat: now,
-    exp: now + 3600,
-  };
-  const encHeader = base64UrlEncode(new TextEncoder().encode(JSON.stringify(header)));
-  const encClaims = base64UrlEncode(new TextEncoder().encode(JSON.stringify(claims)));
-  const signingInput = `${encHeader}.${encClaims}`;
-
-  const cryptoKey = await crypto.subtle.importKey(
-    'pkcs8',
-    pemToDer(key.private_key),
-    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  );
-  const signature = await crypto.subtle.sign(
-    'RSASSA-PKCS1-v1_5',
-    cryptoKey,
-    new TextEncoder().encode(signingInput),
-  );
-  const jwt = `${signingInput}.${base64UrlEncode(signature)}`;
-
-  const res = await fetch(key.token_uri || 'https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-      assertion: jwt,
-    }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error('Google token exchange failed: ' + JSON.stringify(data));
-  return data.access_token;
-}
+const WEBAPP_URL = Deno.env.get('INTERNET_LEADS_WEBAPP_URL');
+const SYNC_TOKEN = Deno.env.get('INTERNET_LEADS_SYNC_TOKEN');
 
 Deno.serve(async (_req) => {
-  if (!GOOGLE_KEY_RAW) {
+  if (!WEBAPP_URL || !SYNC_TOKEN) {
     return new Response(
-      JSON.stringify({ error: 'GOOGLE_SERVICE_ACCOUNT_KEY is not set — see the comment at the top of this file' }),
+      JSON.stringify({
+        error: 'INTERNET_LEADS_WEBAPP_URL / INTERNET_LEADS_SYNC_TOKEN not set — see the comment at the top of this file',
+      }),
       { status: 500, headers: { 'Content-Type': 'application/json' } },
     );
   }
 
   try {
-    const accessToken = await getAccessToken();
-    const authHeaders = { Authorization: `Bearer ${accessToken}` };
+    const url = `${WEBAPP_URL}${WEBAPP_URL.includes('?') ? '&' : '?'}token=${encodeURIComponent(SYNC_TOKEN)}`;
+    const res = await fetch(url, { redirect: 'follow' });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error('Sheet fetch failed: ' + JSON.stringify(data));
 
-    // Resolve the gid to the tab's current title — the gid in the sheet URL
-    // stays stable even if someone renames the tab later.
-    const metaRes = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}?fields=sheets.properties`,
-      { headers: authHeaders },
-    );
-    const meta = await metaRes.json();
-    if (!metaRes.ok) throw new Error('Sheet metadata fetch failed: ' + JSON.stringify(meta));
-    const sheet = (meta.sheets || []).find((s: any) => s.properties.sheetId === SHEET_GID);
-    if (!sheet) throw new Error(`No tab with gid ${SHEET_GID} found in the spreadsheet`);
-    const tabTitle = sheet.properties.title;
-
-    const valuesRes = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(tabTitle)}`,
-      { headers: authHeaders },
-    );
-    const values = await valuesRes.json();
-    if (!valuesRes.ok) throw new Error('Sheet values fetch failed: ' + JSON.stringify(values));
-
-    const rows: string[][] = values.values || [];
-    if (rows.length < 1) {
-      return new Response(JSON.stringify({ synced: 0, note: 'Sheet is empty' }), {
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-    const headers = rows[0];
-    const records = rows.slice(1)
-      .filter((r) => r.some((cell) => (cell || '').trim() !== ''))
+    const headers: string[] = data.headers || [];
+    const rawRows: any[][] = data.rows || [];
+    const records = rawRows
+      .filter((r) => r.some((cell) => String(cell ?? '').trim() !== ''))
       .map((r) => {
         const obj: Record<string, string> = {};
-        headers.forEach((h, i) => { if (h) obj[h] = r[i] ?? ''; });
+        headers.forEach((h, i) => { if (h) obj[h] = String(r[i] ?? ''); });
         return obj;
       });
 
     const sb = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
+    // Full mirror — see file header for why this is safe (no staff-editable
+    // fields live on this table).
     const { error: delErr } = await sb.from('Internet Leads').delete().not('id', 'is', null);
     if (delErr) throw new Error('Clearing Internet Leads failed: ' + delErr.message);
 
@@ -146,7 +67,7 @@ Deno.serve(async (_req) => {
       if (insErr) throw new Error('Inserting Internet Leads failed: ' + insErr.message);
     }
 
-    return new Response(JSON.stringify({ synced: records.length, tab: tabTitle }), {
+    return new Response(JSON.stringify({ synced: records.length }), {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (e) {
