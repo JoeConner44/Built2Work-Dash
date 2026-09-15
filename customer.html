@@ -486,8 +486,12 @@ async function loadData(){
     };
   });
 
-  // Fetch full contact info for anything already granted.
-  const grantedKeys=directory.filter(d=>d.request.request_status==='granted').map(d=>d.key);
+  // Fetch full contact info for anything already granted. Sourced from
+  // myRequests (every request/grant this company has, any candidate source)
+  // rather than directory (blinded-browse candidates only — Internet Leads
+  // are deliberately excluded from that list but still get granted directly,
+  // so filtering through directory would hide them here).
+  const grantedKeys=Object.keys(myRequests).filter(key=>myRequests[key].request_status==='granted');
   grantedData={};
   await Promise.all(grantedKeys.map(async key=>{
     const {data,error}=await sb.rpc('get_granted_candidate',{p_candidate_key:key});
@@ -694,9 +698,26 @@ function switchCustomerTab(tab){
 }
 
 function updatePipelineBadge(){
-  const n=directory.filter(r=>(r.request||{}).request_status==='granted').length;
+  const n=Object.values(myRequests).filter(r=>r.request_status==='granted').length;
   const b=document.getElementById('pipelineBadge');
   if(b){ b.textContent=n; b.style.display=n?'inline-block':'none'; }
+}
+
+// Directory entry for a granted candidate, falling back to a minimal
+// stand-in (using whatever get_granted_candidate() returned) when the
+// candidate isn't in the blinded-browse directory — e.g. an Internet Lead,
+// which is deliberately excluded from that list but can still be granted.
+function getDirEntry(key){
+  const d=directory.find(x=>x.key===key);
+  if(d) return d;
+  const g=grantedData[key]||{};
+  return {
+    key, city:g.city||'', state:g.state||'', lat:null, lng:null,
+    certs:[], excScore:null, triviaPcts:{},
+    hopeful_job:'', pay_min:null, pay_max:null,
+    furtherVetted:false, hasWorkHistory:false,
+    request: myRequests[key] || {request_status:'none'},
+  };
 }
 
 // Access Granted: every candidate this company has been granted access
@@ -704,7 +725,9 @@ function updatePipelineBadge(){
 function renderPipeline(){
   const q=(document.getElementById('pipeSearchBox')?.value||'').toLowerCase().trim();
   const statusFilter=document.getElementById('pipeStatusFilter')?.value||'';
-  let rows=directory.filter(r=>(r.request||{}).request_status==='granted' && grantedData[r.key]);
+  let rows=Object.keys(myRequests)
+    .filter(key=>myRequests[key].request_status==='granted' && grantedData[key])
+    .map(key=>getDirEntry(key));
 
   if(statusFilter) rows=rows.filter(r=>(grantedData[r.key].status||'Not Contacted')===statusFilter);
   if(q) rows=rows.filter(r=>{
@@ -804,8 +827,8 @@ async function updateStatus(key,sel){
 function showDetail(key){
   const req=myRequests[key];
   if(!req||req.request_status!=='granted')return;
-  const g=grantedData[key],d=directory.find(x=>x.key===key);
-  if(!g||!d)return;
+  const g=grantedData[key],d=getDirEntry(key);
+  if(!g)return;
   const name=((g.first_name||'')+' '+(g.last_name||'')).trim()||'Candidate';
   const rawPhone=g.mobile_phone?String(g.mobile_phone).split('.')[0].replace(/[^\d]/g,''):'';
   document.getElementById('detName').textContent=name;
