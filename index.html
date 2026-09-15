@@ -2269,7 +2269,7 @@ function switchPipeTab(tab){
     el.style.borderBottomColor = tab===name ? '#ce0e2d' : 'transparent';
   });
   if(tab==='pipeline'){
-    loadCRMData().then(()=>{ renderPipeline(); markEventsSeen(); });
+    loadLeadsData().then(()=>{ renderPipeline(); markEventsSeen(); });
   } else if(tab==='leads'){
     loadLeadsData().then(renderLeads);
   } else if(tab==='requests'){
@@ -2560,9 +2560,15 @@ function renderPipeline(){
   let rows = assignments.filter(a=>a.company_id).map(a=>{
     const company = companies.find(c=>c.id===a.company_id);
     const w = rawWeb.find(r=>normalizePhone(r['Mobile Phone']||'')===a.phone);
-    const name = w?(w['First Name']||'')+' '+(w['Last Name']||''):'Phone: '+a.phone;
+    const l = !w ? rawLeads.find(r=>normalizePhone(r['Phone']||'')===a.phone) : null;
+    const name = w ? ((w['First Name']||'')+' '+(w['Last Name']||'')).trim() : (l ? (l['Name']||'').trim() : '');
+    // a.phone is the normalized matching key (last 9 digits, used to join
+    // across tables) — not a real dialable number. Show the actual phone
+    // from whichever source record matched instead of that internal key.
+    const displayPhone = w ? (w['Mobile Phone']||a.phone) : (l ? (l['Phone']||a.phone) : a.phone);
     const master = masterByPhone[a.phone]||{};
-    return {...a, companyName: company?.name||'Unknown', name: name.trim(),
+    return {...a, companyName: company?.name||'Unknown', name: name || ('Phone: '+a.phone),
+            displayPhone,
             hopeful_job: master.hopeful_job, pay_min: master.pay_min, pay_max: master.pay_max};
   });
 
@@ -2603,7 +2609,7 @@ function renderPipeline(){
     return `
     <tr>
       <td><input type="checkbox" data-id="${jsAttr(r.id)}" ${pipeSelected.has(r.id)?'checked':''} onchange="togglePipeSelect('${jsAttr(r.id)}',this.checked)"></td>
-      <td><span class="pipe-name">${esc(r.name)}</span>${rej.length?`<span class="rej-badge" data-tip="${esc(rejTip)}" onmouseenter="showTip(event,this)" onmouseleave="hideTip()">&#10005; ${rej.length}</span>`:''}<br><span style="font-size:11px;color:var(--muted)">${esc(r.phone)}</span></td>
+      <td><span class="pipe-name">${esc(r.name)}</span>${rej.length?`<span class="rej-badge" data-tip="${esc(rejTip)}" onmouseenter="showTip(event,this)" onmouseleave="hideTip()">&#10005; ${rej.length}</span>`:''}<br><span style="font-size:11px;color:var(--muted)">${esc(r.displayPhone)}</span></td>
       <td><span class="pipe-company">${esc(r.companyName)}</span></td>
       <td><select class="pipe-filter-select" onchange="updatePipelineStatus('${jsAttr(r.id)}',this)">${statusOptsFor(r)}</select>${r.status_changed_at?`<br><span class="pipe-time" style="font-size:10px">${timeAgo(r.status_changed_at)}</span>`:''}</td>
       <td style="font-size:12px">${esc(r.hopeful_job)||'—'}</td>
@@ -2867,7 +2873,10 @@ function renderFollowup(){
     const l = !w ? rawLeads.find(r=>normalizePhone(r['Phone']||'')===a.phone) : null;
     const name = w ? ((w['First Name']||'')+' '+(w['Last Name']||'')).trim() : (l ? (l['Name']||'').trim() : '');
     const email = w ? (w['Email Address']||'') : (l ? (l['Email']||'') : '');
-    return {...a, name: name || ('Phone: '+a.phone), email};
+    // a.phone is the normalized matching key (last 9 digits) — show the
+    // actual phone from whichever source record matched instead.
+    const displayPhone = w ? (w['Mobile Phone']||a.phone) : (l ? (l['Phone']||a.phone) : a.phone);
+    return {...a, name: name || ('Phone: '+a.phone), email, displayPhone};
   });
   if(dispFilter) rows = rows.filter(r=>(r.interest_disposition||'')===dispFilter);
   if(q) rows = rows.filter(r=> r.name.toLowerCase().includes(q) || r.phone.includes(q) || r.email.toLowerCase().includes(q));
@@ -2896,7 +2905,7 @@ function renderFollowup(){
     const dueToday = r.interest_disposition==='Future Contact' && r.reminder_date && r.reminder_date<=today;
     const payStr = (r.pay_min!=null||r.pay_max!=null) ? ('$'+(r.pay_min??'?')+'–$'+(r.pay_max??'?')) : '—';
     return `<tr>
-      <td><span class="pipe-name">${esc(r.name)}</span><br><span style="font-size:11px;color:var(--muted)">${esc(r.phone)}</span></td>
+      <td><span class="pipe-name">${esc(r.name)}</span><br><span style="font-size:11px;color:var(--muted)">${esc(r.displayPhone)}</span></td>
       <td style="font-size:12px">${esc(r.email)||'—'}</td>
       <td><select class="pipe-filter-select" onchange="updateFollowupField('${jsAttr(r.id)}','contact_outcome',this.value||null)">
         ${outcomeOpts.map(o=>`<option value="${esc(o)}"${(r.contact_outcome||'')===o?' selected':''}>${o||'—'}</option>`).join('')}
