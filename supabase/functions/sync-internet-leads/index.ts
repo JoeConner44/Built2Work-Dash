@@ -45,10 +45,16 @@ Deno.serve(async (_req) => {
     const data = await res.json();
     if (!res.ok || data.error) throw new Error('Sheet fetch failed: ' + JSON.stringify(data));
 
-    const headers: string[] = data.headers || [];
+    // Trim header text — the sheet's "Skills & Experience " column has a
+    // trailing space that the real Supabase column ("Skills & Experience")
+    // doesn't, and a mismatched key in the insert payload fails the whole
+    // batch, not just that field.
+    const headers: string[] = (data.headers || []).map((h: string) => (h || '').trim());
     const rawRows: any[][] = data.rows || [];
+    const entryIdCol = headers.indexOf('Entry ID');
     const records = rawRows
       .filter((r) => r.some((cell) => String(cell ?? '').trim() !== ''))
+      .filter((r) => entryIdCol < 0 || String(r[entryIdCol] ?? '').trim() !== '')
       .map((r) => {
         const obj: Record<string, string> = {};
         headers.forEach((h, i) => { if (h) obj[h] = String(r[i] ?? ''); });
@@ -58,8 +64,10 @@ Deno.serve(async (_req) => {
     const sb = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
     // Full mirror — see file header for why this is safe (no staff-editable
-    // fields live on this table).
-    const { error: delErr } = await sb.from('Internet Leads').delete().not('id', 'is', null);
+    // fields live on this table). "Entry ID" (the Google Form's own
+    // submission id) is this table's key column — unlike exc_truck_loading,
+    // there's no separate auto-generated "id" column here.
+    const { error: delErr } = await sb.from('Internet Leads').delete().not('Entry ID', 'is', null);
     if (delErr) throw new Error('Clearing Internet Leads failed: ' + delErr.message);
 
     if (records.length) {
