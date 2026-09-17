@@ -20,7 +20,7 @@ const { createClient } = supabase;
  * the customer portal in one tab silently signs the staff dashboard out in
  * another (and vice versa), because both pages share this same file and
  * would otherwise fight over the same stored session. */
-const PORTAL = location.pathname.includes('customer.html') ? 'customer'
+const PORTAL = location.pathname.includes('/customer') ? 'customer'
              : location.pathname.includes('operations.html') ? 'operations'
              : 'staff';
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON, {
