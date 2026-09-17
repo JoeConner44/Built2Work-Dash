@@ -28,3 +28,15 @@ The PDF export in `index.html` embeds its own copy of the logo as a base64 strin
 raw image data at build time. That copy is intentionally separate and is **not**
 updated by replacing `assets/logo.png`. If you want the exported PDF header to use
 the new logo too, update that `LOGO` constant with the base64 of the new image.
+
+# Favicon
+
+The browser tab icon is loaded from:
+
+```
+assets/favicon.ico
+```
+
+To install/replace it, drop the file into this folder named exactly `favicon.ico`
+and commit it — `index.html`, `operations.html`, and `customer.html` all already
+link to `assets/favicon.ico`, so no HTML changes are needed.
