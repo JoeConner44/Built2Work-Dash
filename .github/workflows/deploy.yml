@@ -1,0 +1,60 @@
+name: Deploy to Netlify
+
+# Two subdomains, one repo:
+#   dashboard.builttoworkusa.com -> index.html (staff) + operations.html
+#   customer.builttoworkusa.com  -> customer.html (rewritten to "/")
+# Each is a separate Netlify site. Requires repo secrets: NETLIFY_AUTH_TOKEN,
+# NETLIFY_DASHBOARD_SITE_ID, NETLIFY_CUSTOMER_SITE_ID.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  deploy-dashboard:
+    name: Deploy staff dashboard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stage site files
+        run: |
+          mkdir -p dist
+          cp index.html operations.html shared.js dist/
+          cp -r assets dist/
+
+      - name: Deploy to Netlify
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_DASHBOARD_SITE_ID }}
+        run: |
+          npx --yes netlify-cli deploy \
+            --dir=dist \
+            --site="$NETLIFY_SITE_ID" \
+            --auth="$NETLIFY_AUTH_TOKEN" \
+            --prod
+
+  deploy-customer:
+    name: Deploy customer portal
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stage site files
+        run: |
+          mkdir -p dist
+          cp customer.html shared.js dist/
+          cp -r assets dist/
+          printf '/*    /customer.html   200\n' > dist/_redirects
+
+      - name: Deploy to Netlify
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_CUSTOMER_SITE_ID }}
+        run: |
+          npx --yes netlify-cli deploy \
+            --dir=dist \
+            --site="$NETLIFY_SITE_ID" \
+            --auth="$NETLIFY_AUTH_TOKEN" \
+            --prod
