@@ -1208,7 +1208,7 @@ async function refreshData(){
 function getPhone(row,isExc){return isExc?String(row['Login Code']||'').trim():String(row['Mobile Phone']||'').trim();}
 // normalizePhone() lives in shared.js
 function getAge(dob){if(!dob)return null;const d=new Date(dob);if(isNaN(d))return null;return Math.floor((new Date()-d)/(365.25*86400000));}
-function ageGroup(age){if(!age||age<18)return null;const bins=[[18,20],[21,25],[26,30],[31,35],[36,40],[41,45],[46,50],[51,55],[56,60],[61,65],[66,70],[71,75],[76,80]];for(const [lo,hi] of bins)if(age>=lo&&age<=hi)return lo+'-'+hi;return '80+';}
+function ageGroup(age){if(age==null)return null;if(age<18)return '<18';const bins=[[18,20],[21,25],[26,30],[31,35],[36,40],[41,45],[46,50],[51,55],[56,60],[61,65],[66,70],[71,75],[76,80]];for(const [lo,hi] of bins)if(age>=lo&&age<=hi)return lo+'-'+hi;return '80+';}
 function excScoreSeg(s){if(s==null)return null;if(s<=10)return '0-10';if(s<=20)return '11-20';if(s<=30)return '21-30';if(s<=40)return '31-40';if(s<=50)return '41-50';if(s<=60)return '51-60';if(s<=70)return '61-70';if(s<=80)return '71-80';if(s<=90)return '81-90';return '91-100';}
 function getEvents(){const ev=new Set(['ALL']);[...rawWeb,...rawExc,...rawWin].forEach(r=>{const e=(r['Event Name']||'').trim();if(e)ev.add(e);});return [...ev];}
 function populateEventDropdown(){
@@ -1338,7 +1338,7 @@ function buildSidebar(){
   buildChipFilter('fEmp',['Currently employed in construction and/or a trade','Currently employed in another industry','Retired','Student','Unemployed and looking for work','Other'],'employment',{'Currently employed in construction and/or a trade':'Trades','Currently employed in another industry':'Other Industry','Retired':'Retired','Student':'Student','Unemployed and looking for work':'Unemployed','Other':'Other'});
   buildChipFilter('fScore',['0-10','11-20','21-30','31-40','41-50','51-60','61-70','71-80','81-90','91-100'],'scoreSegs');
   const ages=rawWeb.map(r=>getAge(r['DOB'])).filter(Boolean).map(ageGroup).filter(Boolean);
-  buildChipFilter('fAge',[...new Set(ages)].sort((a,b)=>parseInt(a)-parseInt(b)),'ageGroups');
+  buildChipFilter('fAge',[...new Set(ages)].sort((a,b)=>{if(a==='<18')return -1;if(b==='<18')return 1;return parseInt(a)-parseInt(b);}),'ageGroups');
   buildChipFilter('fGender',[...new Set(rawWeb.map(r=>(r['Gender']||'').trim()).filter(Boolean))],'gender');
   const sc={};rawWeb.forEach(r=>{const s=(r['State']||'').trim();if(s)sc[s]=(sc[s]||0)+1;});
   buildChipFilter('fState',Object.entries(sc).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([s])=>s),'states');
@@ -1443,7 +1443,7 @@ function renderGrid(webRows,excRows,winRows){
   const jiC={'Yes':'#3fb950','Maybe':'#f0a500','No':'#f85149','No Answer':'#8b949e'};
   const jiK=Object.keys(ji),jiV=jiK.map(k=>ji[k]);
   charts.ji=new Chart(document.getElementById('chartJI'),{type:'pie',data:{labels:jiK,datasets:[{data:jiV,backgroundColor:jiK.map(k=>jiC[k]||'#8b949e'),borderColor:'#ffffff',borderWidth:2}]},options:{...co,onClick:(e,els)=>{if(!els.length)return;toggleFilter('jobInterest',jiK[els[0].index]);}}});
-  const ageBins=['18-20','21-25','26-30','31-35','36-40','41-45','46-50','51-55','56-60','61-65','66-70','71-75','76-80','80+'];
+  const ageBins=['<18','18-20','21-25','26-30','31-35','36-40','41-45','46-50','51-55','56-60','61-65','66-70','71-75','76-80','80+'];
   const ac={};ageBins.forEach(b=>ac[b]=0);webRows.forEach(r=>{const a=getAge(r['DOB']),g=ageGroup(a);if(g&&ac[g]!==undefined)ac[g]++;});
   const ahK=ageBins.filter(b=>ac[b]>0),ahV=ahK.map(b=>ac[b]);
   charts.age=new Chart(document.getElementById('chartAge'),{type:'bar',data:{labels:ahK,datasets:[{label:'Participants',data:ahV,backgroundColor:ahV.map((_,i)=>{const t=i/ahV.length;return 'rgba(240,'+Math.round(165*(1-t)+88*t)+','+Math.round(t*4)+',0.85)';}),borderColor:'transparent',borderRadius:3}]},options:{...co,plugins:{...co.plugins,legend:{display:false}},scales:{x:{ticks:{color:'#8b949e',font:{family:'Barlow Condensed',size:10}},grid:{color:'#e1e6eb'}},y:{ticks:{color:'#8b949e',font:{family:'Barlow Condensed',size:10}},grid:{color:'#e1e6eb'}}},onClick:(e,els)=>{if(!els.length)return;toggleFilter('ageGroups',ahK[els[0].index]);}}});
