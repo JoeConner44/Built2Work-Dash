@@ -1074,7 +1074,7 @@ async function doLogin(){
   // This is an explicit sign-in the person just performed, so if the
   // account they typed turns out to be a customer account, honor that —
   // take them to the portal they actually meant to reach.
-  if(await isCustomerEmail(email)){window.location.href=location.pathname.includes('/staff/')?'../customer/':'customer.html';return;}
+  if(await isCustomerEmail(email)){window.location.href='/customer/';return;}
   showApp(data.user.email);
   await loadData();
 }

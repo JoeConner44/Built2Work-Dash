@@ -1,9 +1,12 @@
 name: Deploy to Netlify
 
-# One subdomain, two folders:
-#   dashboard.builttoworkusa.com/staff/    -> index.html (staff) + operations.html
+# One subdomain:
+#   dashboard.builttoworkusa.com/          -> index.html (staff) + operations.html
+#   dashboard.builttoworkusa.com/staff/    -> same staff bundle, kept as an alias
 #   dashboard.builttoworkusa.com/customer/ -> customer.html (served as that folder's index.html)
-#   dashboard.builttoworkusa.com/          -> redirects to /staff/
+# The staff bundle is duplicated at the root and under /staff/ (rather than using
+# a redirect/rewrite) so relative references in index.html (shared.js, assets/,
+# operations.html) resolve correctly from either location.
 # Requires repo secrets: NETLIFY_AUTH_TOKEN, NETLIFY_SITE_ID.
 
 on:
@@ -22,14 +25,15 @@ jobs:
         run: |
           mkdir -p dist/staff dist/customer
 
+          cp index.html operations.html shared.js dist/
+          cp -r assets dist/
+
           cp index.html operations.html shared.js dist/staff/
           cp -r assets dist/staff/
 
           cp customer.html dist/customer/index.html
           cp shared.js dist/customer/
           cp -r assets dist/customer/
-
-          printf '/    /staff/   302\n' > dist/_redirects
 
       - name: Deploy to Netlify
         env:
