@@ -73,7 +73,12 @@ Deno.serve(async (_req) => {
     // auto-generated "id" column here.
     let pruned = 0;
     if (records.length) {
-      const { error: upErr } = await sb.from('Internet Leads').upsert(records, { onConflict: 'Entry ID' });
+      // onConflict is parsed by PostgREST as an identifier list, unlike a
+      // plain filter column (e.g. .not('Entry ID', ...) below) which is
+      // sent as a URL parameter key — a space/mixed-case identifier here
+      // needs explicit double-quoting or PostgREST folds it to lowercase
+      // and fails to find the real "Entry ID" constraint.
+      const { error: upErr } = await sb.from('Internet Leads').upsert(records, { onConflict: '"Entry ID"' });
       if (upErr) throw new Error('Upserting Internet Leads failed: ' + upErr.message);
 
       // Remove rows for leads no longer present in the sheet (e.g. deleted
@@ -83,7 +88,7 @@ Deno.serve(async (_req) => {
         .from('Internet Leads')
         .delete()
         .not('Entry ID', 'in', `(${entryIds.join(',')})`)
-        .select('Entry ID');
+        .select('"Entry ID"');
       if (delErr) throw new Error('Removing stale Internet Leads failed: ' + delErr.message);
       pruned = staleRows?.length || 0;
     }
