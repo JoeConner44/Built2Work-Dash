@@ -2870,6 +2870,7 @@ function renderFollowup(){
   updateFollowupBadge();
   const q = (document.getElementById('followupSearch')?.value||'').toLowerCase().trim();
   const dispFilter = document.getElementById('followupDispFilter')?.value || '';
+  const eventFilter = document.getElementById('followupEventFilter')?.value || '';
   const today = new Date().toISOString().slice(0,10);
   let rows = assignments.filter(a=>!a.company_id).map(a=>{
     const w = rawWeb.find(r=>normalizePhone(r['Mobile Phone']||'')===a.phone);
@@ -2879,9 +2880,20 @@ function renderFollowup(){
     // a.phone is the normalized matching key (last 9 digits) — show the
     // actual phone from whichever source record matched instead.
     const displayPhone = w ? (w['Mobile Phone']||a.phone) : (l ? (l['Phone']||a.phone) : a.phone);
-    return {...a, name: name || ('Phone: '+a.phone), email, displayPhone};
+    // Internet Leads candidates aren't tied to any BTW event — group them
+    // under one pseudo-event so they're still filterable as a set.
+    const event = w ? (w['Event Name']||'').trim() : (l ? 'Internet Leads' : '');
+    return {...a, name: name || ('Phone: '+a.phone), email, displayPhone, event};
   });
+
+  const eventSel = document.getElementById('followupEventFilter');
+  if(eventSel && eventSel.options.length<=1){
+    const events=[...new Set(rows.map(r=>r.event).filter(Boolean))].sort();
+    events.forEach(ev=>{const o=document.createElement('option');o.value=ev;o.textContent=ev;eventSel.appendChild(o);});
+  }
+
   if(dispFilter) rows = rows.filter(r=>(r.interest_disposition||'')===dispFilter);
+  if(eventFilter) rows = rows.filter(r=>r.event===eventFilter);
   if(q) rows = rows.filter(r=> r.name.toLowerCase().includes(q) || r.phone.includes(q) || r.email.toLowerCase().includes(q));
   rows.sort((a,b)=>{
     const ad = a.interest_disposition==='Future Contact' && a.reminder_date ? a.reminder_date : '9999-99-99';
@@ -3604,6 +3616,9 @@ async function bulkAddToUnassigned(){
       <option>Interested</option>
       <option>Future Contact</option>
       <option>Not Interested</option>
+    </select>
+    <select class="pipe-filter-select" id="followupEventFilter" onchange="renderFollowup()">
+      <option value="">All Events</option>
     </select>
     <input class="pipe-search" id="followupSearch" placeholder="Search name / phone / email…" oninput="renderFollowup()">
     <span class="pipe-count" id="followupCount"></span>
