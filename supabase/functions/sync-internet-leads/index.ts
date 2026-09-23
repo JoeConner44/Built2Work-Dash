@@ -14,9 +14,9 @@
 // rather than delete-then-insert: a blanket delete followed by a separate
 // insert isn't atomic across two HTTP requests, so two overlapping runs
 // (the cron firing while someone manually invokes it, say) can have one
-// run's insert land on rows another run just re-inserted, hitting
-// "Entry ID"'s primary key. Upsert is safe against that since it just
-// updates the row instead of colliding.
+// run's insert land on rows another run just re-inserted, hitting the
+// table's primary key ("Phone" — see below). Upsert is safe against that
+// since it just updates the row instead of colliding.
 //
 // Deploy: `supabase functions deploy sync-internet-leads`
 // Secrets this function needs (set once, not committed anywhere — see
@@ -81,34 +81,46 @@ Deno.serve(async (_req) => {
 
     const sb = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-    // "Entry ID" (the Google Form's own submission id) is this table's
-    // primary key — unlike exc_truck_loading, there's no separate
-    // auto-generated "id" column here.
+    // The table's actual primary key is "Phone" (confirmed via
+    // pg_constraint) — not "Entry ID" as assumed earlier, which is just a
+    // plain unconstrained column. Dedupe by Phone before upserting:
+    // Postgres errors ("ON CONFLICT DO UPDATE command cannot affect row a
+    // second time") if two rows in the same upsert share a conflict key,
+    // which happens whenever someone submits the Google Form more than
+    // once. Keep the highest Entry ID (most recent submission) per phone.
+    const byPhone = new Map<string, Record<string, string>>();
+    for (const r of records) {
+      const phone = r['Phone'];
+      if (!phone) continue;
+      const existing = byPhone.get(phone);
+      if (!existing || Number(r['Entry ID'] || 0) > Number(existing['Entry ID'] || 0)) {
+        byPhone.set(phone, r);
+      }
+    }
+    const dedupedRecords = [...byPhone.values()];
+
     let pruned = 0;
-    if (records.length) {
-      // onConflict is parsed by PostgREST as an identifier list, unlike a
-      // plain filter column (e.g. .not('Entry ID', ...) below) which is
-      // sent as a URL parameter key — a space/mixed-case identifier here
-      // needs explicit double-quoting or PostgREST folds it to lowercase
-      // and fails to find the real "Entry ID" constraint.
-      const { error: upErr } = await sb.from('Internet Leads').upsert(records, { onConflict: '"Entry ID"' });
+    if (dedupedRecords.length) {
+      const { error: upErr } = await sb.from('Internet Leads').upsert(dedupedRecords, { onConflict: '"Phone"' });
       if (upErr) throw new Error('Upserting Internet Leads failed: ' + upErr.message);
 
-      // Remove rows for leads no longer present in the sheet (e.g. deleted
-      // there) — scoped to just the current Entry IDs, not a blanket clear.
-      const entryIds = records.map((r) => r['Entry ID']).filter((v) => v !== '' && v != null);
+      // Remove rows for phones no longer present in the sheet (e.g.
+      // deleted there) — scoped to just the current phones, not a blanket
+      // clear.
+      const phones = dedupedRecords.map((r) => r['Phone']);
       const { data: staleRows, error: delErr } = await sb
         .from('Internet Leads')
         .delete()
-        .not('Entry ID', 'in', `(${entryIds.join(',')})`)
-        .select('"Entry ID"');
+        .not('Phone', 'in', `(${phones.join(',')})`)
+        .select('"Phone"');
       if (delErr) throw new Error('Removing stale Internet Leads failed: ' + delErr.message);
       pruned = staleRows?.length || 0;
     }
 
-    return new Response(JSON.stringify({ synced: records.length, pruned }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({ synced: dedupedRecords.length, sheetRows: records.length, pruned }),
+      { headers: { 'Content-Type': 'application/json' } },
+    );
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), {
       status: 500,
