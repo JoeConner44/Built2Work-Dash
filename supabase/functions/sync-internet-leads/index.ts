@@ -47,8 +47,21 @@ Deno.serve(async (_req) => {
   try {
     const url = `${WEBAPP_URL}${WEBAPP_URL.includes('?') ? '&' : '?'}token=${encodeURIComponent(SYNC_TOKEN)}`;
     const res = await fetch(url, { redirect: 'follow' });
-    const data = await res.json();
-    if (!res.ok || data.error) throw new Error('Sheet fetch failed: ' + JSON.stringify(data));
+    // Read as text first — res.json() throws (or, in some runtimes,
+    // silently resolves to undefined) on an empty/non-JSON body, e.g. if
+    // Apps Script rate-limits the request or returns an HTML error page
+    // instead of the expected JSON. Parsing text ourselves means a bad
+    // response surfaces as a clear error instead of an opaque crash.
+    const raw = await res.text();
+    let data: any;
+    try {
+      data = raw ? JSON.parse(raw) : null;
+    } catch {
+      throw new Error(`Sheet fetch returned non-JSON (status ${res.status}): ${raw.slice(0, 300)}`);
+    }
+    if (!res.ok || !data || data.error) {
+      throw new Error(`Sheet fetch failed (status ${res.status}): ${JSON.stringify(data ?? raw.slice(0, 300))}`);
+    }
 
     // Trim header text — the sheet's "Skills & Experience " column has a
     // trailing space that the real Supabase column ("Skills & Experience")
