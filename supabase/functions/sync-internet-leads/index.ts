@@ -9,9 +9,14 @@
 //
 // This table has no staff-editable fields of its own (all Follow-Up
 // tracking lives on candidate_assignments, keyed by phone — see
-// supabase-internet-leads-followup.sql), so each run replaces the table's
-// contents wholesale rather than upserting. That avoids needing a unique
-// constraint on this table and matches "mirror of the sheet" semantics.
+// supabase-internet-leads-followup.sql), so it's safe to mirror the sheet's
+// contents wholesale on each run. That's done as an upsert-then-prune
+// rather than delete-then-insert: a blanket delete followed by a separate
+// insert isn't atomic across two HTTP requests, so two overlapping runs
+// (the cron firing while someone manually invokes it, say) can have one
+// run's insert land on rows another run just re-inserted, hitting
+// "Entry ID"'s primary key. Upsert is safe against that since it just
+// updates the row instead of colliding.
 //
 // Deploy: `supabase functions deploy sync-internet-leads`
 // Secrets this function needs (set once, not committed anywhere — see
@@ -63,19 +68,27 @@ Deno.serve(async (_req) => {
 
     const sb = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-    // Full mirror — see file header for why this is safe (no staff-editable
-    // fields live on this table). "Entry ID" (the Google Form's own
-    // submission id) is this table's key column — unlike exc_truck_loading,
-    // there's no separate auto-generated "id" column here.
-    const { error: delErr } = await sb.from('Internet Leads').delete().not('Entry ID', 'is', null);
-    if (delErr) throw new Error('Clearing Internet Leads failed: ' + delErr.message);
-
+    // "Entry ID" (the Google Form's own submission id) is this table's
+    // primary key — unlike exc_truck_loading, there's no separate
+    // auto-generated "id" column here.
+    let pruned = 0;
     if (records.length) {
-      const { error: insErr } = await sb.from('Internet Leads').insert(records);
-      if (insErr) throw new Error('Inserting Internet Leads failed: ' + insErr.message);
+      const { error: upErr } = await sb.from('Internet Leads').upsert(records, { onConflict: 'Entry ID' });
+      if (upErr) throw new Error('Upserting Internet Leads failed: ' + upErr.message);
+
+      // Remove rows for leads no longer present in the sheet (e.g. deleted
+      // there) — scoped to just the current Entry IDs, not a blanket clear.
+      const entryIds = records.map((r) => r['Entry ID']).filter((v) => v !== '' && v != null);
+      const { data: staleRows, error: delErr } = await sb
+        .from('Internet Leads')
+        .delete()
+        .not('Entry ID', 'in', `(${entryIds.join(',')})`)
+        .select('Entry ID');
+      if (delErr) throw new Error('Removing stale Internet Leads failed: ' + delErr.message);
+      pruned = staleRows?.length || 0;
     }
 
-    return new Response(JSON.stringify({ synced: records.length }), {
+    return new Response(JSON.stringify({ synced: records.length, pruned }), {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (e) {
