@@ -1082,7 +1082,7 @@ async function doLogin(){
   await loadData();
 }
 
-async function doLogout(){clearInterval(refreshTimer);clearCache();destroyOpsCharts();await sb.auth.signOut();location.reload();}
+async function doLogout(){clearInterval(refreshTimer);clearCache();await sb.auth.signOut();location.reload();}
 
 function showApp(email){
   document.getElementById('loginScreen').style.display='none';
