@@ -46,21 +46,43 @@ Deno.serve(async (_req) => {
 
   try {
     const url = `${WEBAPP_URL}${WEBAPP_URL.includes('?') ? '&' : '?'}token=${encodeURIComponent(SYNC_TOKEN)}`;
-    const res = await fetch(url, { redirect: 'follow' });
-    // Read as text first — res.json() throws (or, in some runtimes,
-    // silently resolves to undefined) on an empty/non-JSON body, e.g. if
-    // Apps Script rate-limits the request or returns an HTML error page
-    // instead of the expected JSON. Parsing text ourselves means a bad
-    // response surfaces as a clear error instead of an opaque crash.
-    const raw = await res.text();
+
+    // A plain server-side fetch (no User-Agent, coming from a shared
+    // datacenter IP) can occasionally hit a Google automated-traffic
+    // interstitial that a real browser never sees — confirmed by the same
+    // URL working fine when pasted directly into a browser. A realistic
+    // User-Agent plus a short retry handles this: these blocks are
+    // per-request, not a sign the URL itself is wrong.
+    let raw = '';
+    let lastStatus = 0;
+    let ok = false;
+    for (let attempt = 1; attempt <= 3 && !ok; attempt++) {
+      if (attempt > 1) await new Promise((r) => setTimeout(r, 1000 * attempt));
+      const res = await fetch(url, {
+        redirect: 'follow',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
+      });
+      raw = await res.text();
+      lastStatus = res.status;
+      ok = res.ok && raw.trim().startsWith('{');
+    }
+    if (!ok) {
+      throw new Error(`Sheet fetch failed after retries (status ${lastStatus}): ${raw.slice(0, 300)}`);
+    }
+
+    // Read as text first (above) rather than res.json() — an empty/non-JSON
+    // body would otherwise crash on parsing instead of surfacing a clear
+    // error.
     let data: any;
     try {
-      data = raw ? JSON.parse(raw) : null;
+      data = JSON.parse(raw);
     } catch {
-      throw new Error(`Sheet fetch returned non-JSON (status ${res.status}): ${raw.slice(0, 300)}`);
+      throw new Error(`Sheet fetch returned non-JSON (status ${lastStatus}): ${raw.slice(0, 300)}`);
     }
-    if (!res.ok || !data || data.error) {
-      throw new Error(`Sheet fetch failed (status ${res.status}): ${JSON.stringify(data ?? raw.slice(0, 300))}`);
+    if (data.error) {
+      throw new Error(`Sheet fetch failed (status ${lastStatus}): ${JSON.stringify(data)}`);
     }
 
     // Trim header text — the sheet's "Skills & Experience " column has a
