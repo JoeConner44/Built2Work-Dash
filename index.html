@@ -1170,9 +1170,9 @@ async function loadData(){
 async function fetchFresh(blocking){
   try{
     const [web,exc,win]=await Promise.all([
-      fetchAll('web_registration','"Date","Event Name","Mobile Phone","DOB","First Name","Last Name","Street Address","City","State","Email Address","Gender","Job Status","Student","Interested in Construction Jobs","What industry do you work in?","What industry do you work in","Trade Certifications or Licenses","Trade Certifications or Licenses_1","Trade Certifications or Licenses_2","Trade Certifications or Licenses_3","Trade Certifications or Licenses_4","Trade Certifications or Licenses_5","Trade Certifications or Licenses_6","Trade Certifications or Licenses_7","Trade Certifications or Licenses_8","Trade Certifications or Licenses_9","Trade Certifications or Licenses_10","Trade Certifications or Licenses_11","Trade Certifications or Licenses_12","Trade Certifications or Licenses_13","Trade Certifications or Licenses_14","Trade Certifications or Licenses_15","lat","lng"'),
-      fetchAll('exc_truck_loading','"Date","Event Name","Login Code","Total Score","Safety Score","Productivity Score"'),
-      fetchAll('windows_trivia','"Date","Event Name","QR Code Scan","Mobile Phone","Trivia Auto Mechanic Score","Trivia Civil Construction Score","Trivia Electrical Score","Trivia Plumbing Score","Trivia Welding Score","Trivia Construction Labor Score","Trivia HVAC Score","Trivia Warehouse Score","Trivia Heavy Equipment Technician Score"')
+      fetchAll('web_registration_all','"_source","Date","Event Name","Mobile Phone","DOB","First Name","Last Name","Street Address","City","State","Email Address","Gender","Job Status","Student","Interested in Construction Jobs","What industry do you work in?","What industry do you work in","Trade Certifications or Licenses","Trade Certifications or Licenses_1","Trade Certifications or Licenses_2","Trade Certifications or Licenses_3","Trade Certifications or Licenses_4","Trade Certifications or Licenses_5","Trade Certifications or Licenses_6","Trade Certifications or Licenses_7","Trade Certifications or Licenses_8","Trade Certifications or Licenses_9","Trade Certifications or Licenses_10","Trade Certifications or Licenses_11","Trade Certifications or Licenses_12","Trade Certifications or Licenses_13","Trade Certifications or Licenses_14","Trade Certifications or Licenses_15","lat","lng"'),
+      fetchAll('exc_truck_loading_all','"Date","Event Name","Login Code","Total Score","Safety Score","Productivity Score"'),
+      fetchAll('windows_trivia_all','"Date","Event Name","QR Code Scan","Mobile Phone","Trivia Auto Mechanic Score","Trivia Civil Construction Score","Trivia Electrical Score","Trivia Plumbing Score","Trivia Welding Score","Trivia Construction Labor Score","Trivia HVAC Score","Trivia Warehouse Score","Trivia Heavy Equipment Technician Score"')
     ]);
     rawWeb=web;rawExc=exc;rawWin=win;
     saveCache(web,exc,win);
@@ -3299,8 +3299,8 @@ async function startGeocoding(){
   btn.disabled=true; btn.textContent='Running\u2026';
   document.getElementById('geocodeProgress').style.display='block';
   document.getElementById('geocodeDone').style.display='none';
-  const {data:rows,error}=await sb.from('web_registration')
-    .select('"Mobile Phone","Street Address","City","State","Zip Code"')
+  const {data:rows,error}=await sb.from('web_registration_all')
+    .select('"_source","Mobile Phone","Street Address","City","State","Zip Code"')
     .is('lat',null).limit(2000);
   if(error||!rows){alert('Fetch error: '+(error?.message||'unknown'));return;}
   const total=rows.length; let done=0,geocoded=0,skipped=0;
@@ -3313,9 +3313,14 @@ async function startGeocoding(){
       if(res){
         // Use the raw stored phone value for matching (may be float like 7065508483.0)
         const phoneVal = r['Mobile Phone'];
-        const {error:upErr, count:upCount} = await sb.from('web_registration')
+        // event_participants rows live in a different real table, with a
+        // different raw phone column name ("Phone" not "Mobile Phone") —
+        // write back to whichever table this row actually came from.
+        const table = r._source==='event_participants' ? 'event_participants' : 'web_registration';
+        const phoneCol = r._source==='event_participants' ? 'Phone' : 'Mobile Phone';
+        const {error:upErr, count:upCount} = await sb.from(table)
           .update({lat:res.lat, lng:res.lng})
-          .eq('Mobile Phone', phoneVal)
+          .eq(phoneCol, phoneVal)
           .select();
         if(upErr){
           console.warn('Update error for phone',phoneVal,upErr.message);
@@ -3344,8 +3349,8 @@ async function autoGeocodeNewRecords(){
   if(!MAPBOX_TOKEN) return;
   try{
     // Find rows with address data but no coordinates
-    const {data:rows} = await sb.from('web_registration')
-      .select('"Mobile Phone","Street Address","City","State","Zip Code"')
+    const {data:rows} = await sb.from('web_registration_all')
+      .select('"_source","Mobile Phone","Street Address","City","State","Zip Code"')
       .is('lat', null)
       .not('Street Address', 'is', null)
       .limit(50); // Process up to 50 new records per load
@@ -3358,9 +3363,13 @@ async function autoGeocodeNewRecords(){
           r['Street Address'], r['City'], r['State'], r['Zip Code']
         );
         if(res){
-          const {error:upErr2} = await sb.from('web_registration')
+          // See startGeocoding() — event_participants rows need a different
+          // real table and raw phone-column name for the write-back.
+          const table = r._source==='event_participants' ? 'event_participants' : 'web_registration';
+          const phoneCol = r._source==='event_participants' ? 'Phone' : 'Mobile Phone';
+          const {error:upErr2} = await sb.from(table)
             .update({lat: res.lat, lng: res.lng})
-            .eq('Mobile Phone', r['Mobile Phone'])
+            .eq(phoneCol, r['Mobile Phone'])
             .select();
           if(upErr2) console.warn('Auto-geocode update error:', upErr2.message);
           // Update rawWeb in memory too so distance filter works immediately
