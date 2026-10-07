@@ -227,9 +227,9 @@ async function loadData(){
   document.getElementById('loadingScreen').style.display='flex';
   try{
     const [web,exc,win]=await Promise.all([
-      fetchAll('web_registration','"Date","Event Name","Mobile Phone"'),
-      fetchAll('exc_truck_loading','"Date","Event Name","Login Code","Total Score"'),
-      fetchAll('windows_trivia',   '"Date","Event Name","QR Code Scan","Mobile Phone"'),
+      fetchAll('web_registration_all','"Date","Event Name","Mobile Phone"'),
+      fetchAll('exc_truck_loading_all','"Date","Event Name","Login Code","Total Score"'),
+      fetchAll('windows_trivia_all',   '"Date","Event Name","QR Code Scan","Mobile Phone"'),
     ]);
     rawWeb=web;rawExc=exc;rawWin=win;
     stamp();buildEventPicker();render();
@@ -243,9 +243,9 @@ async function refreshData(){
   setLoadingText('Refreshing…');
   try{
     const [web,exc,win]=await Promise.all([
-      fetchAll('web_registration','"Date","Event Name","Mobile Phone"'),
-      fetchAll('exc_truck_loading','"Date","Event Name","Login Code","Total Score"'),
-      fetchAll('windows_trivia',   '"Date","Event Name","QR Code Scan","Mobile Phone"'),
+      fetchAll('web_registration_all','"Date","Event Name","Mobile Phone"'),
+      fetchAll('exc_truck_loading_all','"Date","Event Name","Login Code","Total Score"'),
+      fetchAll('windows_trivia_all',   '"Date","Event Name","QR Code Scan","Mobile Phone"'),
     ]);
     rawWeb=web;rawExc=exc;rawWin=win;
     stamp();buildEventPicker();render();
