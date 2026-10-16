@@ -2894,6 +2894,7 @@ function renderFollowup(){
 
   if(dispFilter) rows = rows.filter(r=>(r.interest_disposition||'')===dispFilter);
   if(eventFilter) rows = rows.filter(r=>r.event===eventFilter);
+  if(fuFiltersActive()) rows = rows.filter(r=>fuMatches(r.phone));
   if(q) rows = rows.filter(r=> r.name.toLowerCase().includes(q) || r.phone.includes(q) || r.email.toLowerCase().includes(q));
   rows.sort((a,b)=>{
     const ad = a.interest_disposition==='Future Contact' && a.reminder_date ? a.reminder_date : '9999-99-99';
@@ -2911,7 +2912,7 @@ function renderFollowup(){
   document.getElementById('followupCount').textContent = rows.length.toLocaleString()+' candidates';
   const tbody = document.getElementById('followupTbody');
   if(!rows.length){
-    tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--muted);font-style:italic;">No candidates found.</td></tr>';
+    tbody.innerHTML='<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--muted);font-style:italic;">No candidates found.</td></tr>';
     return;
   }
   const outcomeOpts = ['', 'Contacted','Wrong Number','No Response'];
@@ -2934,6 +2935,7 @@ function renderFollowup(){
       <td style="font-size:12px">${esc(r.hopeful_job)||'—'}</td>
       <td style="font-size:12px">${payStr}</td>
       <td style="text-align:center"><input type="checkbox" ${r.further_vetted?'checked':''} onchange="updateFollowupField('${jsAttr(r.id)}','further_vetted',this.checked)" title="Mark this candidate as further vetted by BTW staff — shown as a filterable check on the customer portal, no detail is shared"></td>
+      <td style="text-align:center;font-size:12px">${r.culture_index_url?`<a href="${esc(r.culture_index_url)}" target="_blank" rel="noopener" title="Open Culture Index PDF" style="color:var(--blue);font-weight:700">CI</a>`:'—'}</td>
       <td class="pipe-notes-cell" title="${esc(r.notes)}">${esc(r.notes)||'—'}</td>
       <td><button onclick="openFollowupEdit('${jsAttr(r.id)}')" style="font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:3px 10px;border:1.5px solid var(--border);background:transparent;color:var(--muted);border-radius:3px;cursor:pointer;">&#9998; Edit</button></td>
     </tr>`;
@@ -2996,11 +2998,11 @@ async function saveReminder(){
   renderFollowup();
 }
 
-let followupEditId=null, followupEditFile=null;
+let followupEditId=null, followupEditFile=null, followupEditCiFile=null;
 function openFollowupEdit(id){
   const a = assignments.find(x=>x.id===id);
   if(!a) return;
-  followupEditId = id; followupEditFile=null;
+  followupEditId = id; followupEditFile=null; followupEditCiFile=null;
   const w = rawWeb.find(r=>normalizePhone(r['Mobile Phone']||'')===a.phone);
   const l = !w ? rawLeads.find(r=>normalizePhone(r['Phone']||'')===a.phone) : null;
   const name = w ? ((w['First Name']||'')+' '+(w['Last Name']||'')).trim() : (l ? (l['Name']||'').trim() : ('Phone: '+a.phone));
@@ -3012,17 +3014,24 @@ function openFollowupEdit(id){
   document.getElementById('fuNotes').value = a.notes||'';
   document.getElementById('fuFileName').textContent='';
   document.getElementById('fuFileExisting').innerHTML = a.file_url ? `<a href="${a.file_url}" target="_blank" style="color:var(--blue)">&#128206; View existing resume</a>` : '';
+  document.getElementById('fuCiFileName').textContent='';
+  document.getElementById('fuCiFile').value='';
+  document.getElementById('fuCiExisting').innerHTML = a.culture_index_url ? `<a href="${esc(a.culture_index_url)}" target="_blank" rel="noopener" style="color:var(--blue)">&#128206; View existing Culture Index</a>` : '';
   document.getElementById('fuMsg').textContent='';
   document.getElementById('followupEditOverlay').classList.add('open');
 }
 function closeFollowupEdit(e){
   if(e && e.target!==document.getElementById('followupEditOverlay')) return;
   document.getElementById('followupEditOverlay').classList.remove('open');
-  followupEditId=null; followupEditFile=null;
+  followupEditId=null; followupEditFile=null; followupEditCiFile=null;
 }
 function onFuFileChange(input){
   followupEditFile = input.files && input.files[0] ? input.files[0] : null;
   document.getElementById('fuFileName').textContent = followupEditFile ? followupEditFile.name : '';
+}
+function onFuCiFileChange(input){
+  followupEditCiFile = input.files && input.files[0] ? input.files[0] : null;
+  document.getElementById('fuCiFileName').textContent = followupEditCiFile ? followupEditCiFile.name : '';
 }
 async function saveFollowupEdit(){
   const msg = document.getElementById('fuMsg');
@@ -3039,6 +3048,17 @@ async function saveFollowupEdit(){
     const {data:urlData} = sb.storage.from('candidate-files').getPublicUrl(path);
     fileUrl = urlData?.publicUrl || null;
   }
+  let ciUrl = a.culture_index_url || null;
+  if(followupEditCiFile){
+    const v = validateUploadFile(followupEditCiFile);
+    if(!v.ok){ msg.style.color='#f85149'; msg.textContent=v.error; return; }
+    if(v.ext!=='pdf'){ msg.style.color='#f85149'; msg.textContent='Culture Index must be a PDF.'; return; }
+    const ciPath = `culture-index/${a.phone}_${Date.now()}.pdf`;
+    const {error:ciErr} = await sb.storage.from('candidate-files').upload(ciPath, followupEditCiFile, {upsert:true});
+    if(ciErr){ msg.style.color='#f85149'; msg.textContent='Culture Index upload error: '+ciErr.message; return; }
+    const {data:ciUrlData} = sb.storage.from('candidate-files').getPublicUrl(ciPath);
+    ciUrl = ciUrlData?.publicUrl || null;
+  }
   const payMinRaw = document.getElementById('fuPayMin').value;
   const payMaxRaw = document.getElementById('fuPayMax').value;
   const payload = {
@@ -3049,11 +3069,132 @@ async function saveFollowupEdit(){
     notes: document.getElementById('fuNotes').value.trim(),
     file_url: fileUrl,
   };
+  // Only send culture_index_url when it changed, so saving other fields still
+  // works on a database where supabase-culture-index.sql hasn't been run yet.
+  if(ciUrl !== (a.culture_index_url || null)) payload.culture_index_url = ciUrl;
   const {error} = await sb.from('candidate_assignments').update(payload).eq('id', followupEditId);
   if(error){ msg.style.color='#f85149'; msg.textContent='Error: '+error.message; return; }
   Object.assign(a, payload);
   msg.style.color='var(--green)'; msg.textContent='✓ Saved!';
   setTimeout(()=>{ document.getElementById('followupEditOverlay').classList.remove('open'); renderFollowup(); }, 600);
+}
+
+// ── FOLLOW-UP FILTER MENU ─────────────────────────────────────────────────────
+// Independent of the Analytics sidebar's `filters` object — changing these never
+// touches the Analytics tab. Matching is by phone against the same raw
+// registration / EXC / trivia rows Analytics uses.
+const fuf={excMin:0,excMax:100,jobInterest:new Set(),employment:new Set(),scoreSegs:new Set(),ageGroups:new Set(),gender:new Set(),states:new Set(),trivia:new Set(),triviaScoreMin:0,triviaScoreMax:20,certs:new Set()};
+const FU_SETS=['jobInterest','employment','scoreSegs','ageGroups','gender','states','trivia','certs'];
+let fuMenuBuilt=false;
+function fuFilterCount(){let n=0;if(fuf.excMin>0||fuf.excMax<100)n++;FU_SETS.forEach(k=>{n+=fuf[k].size;});if(fuf.triviaScoreMin>0||fuf.triviaScoreMax<20)n++;return n;}
+function fuFiltersActive(){return fuFilterCount()>0;}
+function fuMatches(phone){
+  const w=rawWeb.filter(r=>normalizePhone(getPhone(r,false))===phone);
+  if(!w.length) return false; // Internet Leads / no registration data
+  const webOk=w.some(r=>{
+    if(fuf.employment.size>0&&!fuf.employment.has((r['Job Status']||'').trim()))return false;
+    if(fuf.jobInterest.size>0&&!fuf.jobInterest.has((r['Interested in Construction Jobs']||'').trim()))return false;
+    if(fuf.ageGroups.size>0){const ag=ageGroup(getAge(r['DOB']));if(!ag||!fuf.ageGroups.has(ag))return false;}
+    if(fuf.gender.size>0&&!fuf.gender.has((r['Gender']||'').trim()))return false;
+    if(fuf.states.size>0&&!fuf.states.has((r['State']||'').trim()))return false;
+    if(fuf.certs.size>0){
+      const any=[...fuf.certs].some(name=>{const idx=CERT_NAMES.indexOf(name);return idx>=0&&(r[CERT_COLS[idx]]||'').trim()==='Yes';});
+      if(!any)return false;
+    }
+    return true;
+  });
+  if(!webOk) return false;
+  if(fuf.excMin>0||fuf.excMax<100||fuf.scoreSegs.size>0){
+    let best=NaN;
+    rawExc.forEach(r=>{if(normalizePhone(getPhone(r,true))!==phone)return;const s=parseFloat(r['Total Score']);if(!isNaN(s)&&(isNaN(best)||s>best))best=s;});
+    if(isNaN(best)||best<fuf.excMin||best>fuf.excMax)return false;
+    if(fuf.scoreSegs.size>0&&!fuf.scoreSegs.has(excScoreSeg(best)))return false;
+  }
+  if(fuf.trivia.size>0){
+    const wins=rawWin.filter(r=>(normalizePhone(r['QR Code Scan']||'')||normalizePhone(r['Mobile Phone']||''))===phone||normalizePhone(r['Mobile Phone']||'')===phone);
+    const ok=wins.some(r=>{
+      const took=[...fuf.trivia].some(t=>{const col=TRIVIA_COLS[t];return col&&r[col]!==''&&r[col]!=null&&!isNaN(parseFloat(r[col]));});
+      if(!took)return false;
+      if(fuf.trivia.size===1){
+        const sc=parseFloat(r[TRIVIA_COLS[[...fuf.trivia][0]]]);
+        if(isNaN(sc)||sc<fuf.triviaScoreMin||sc>fuf.triviaScoreMax)return false;
+      }
+      return true;
+    });
+    if(!ok)return false;
+  }
+  return true;
+}
+function fuBuildChips(id,values,key,labels){
+  const wrap=document.getElementById(id);if(!wrap)return;
+  wrap.innerHTML='';
+  values.forEach(v=>{
+    const c=document.createElement('span');
+    c.className='filter-chip'+(fuf[key].has(v)?' active':'');
+    c.textContent=(labels&&labels[v])||v;
+    c.title=v;
+    c.onclick=()=>{
+      if(fuf[key].has(v))fuf[key].delete(v);else fuf[key].add(v);
+      c.classList.toggle('active',fuf[key].has(v));
+      if(key==='trivia'){const ts=document.getElementById('fuTriviaScoreSection');const on=fuf.trivia.size===1;ts.style.opacity=on?'1':'0.4';ts.style.pointerEvents=on?'auto':'none';}
+      fuFilterChanged();
+    };
+    wrap.appendChild(c);
+  });
+}
+function buildFuFilterMenu(){
+  fuBuildChips('fuJI',['Yes','Maybe','No','No Answer'],'jobInterest');
+  fuBuildChips('fuEmp',['Currently employed in construction and/or a trade','Currently employed in another industry','Retired','Student','Unemployed and looking for work','Other'],'employment',{'Currently employed in construction and/or a trade':'Trades','Currently employed in another industry':'Other Industry','Unemployed and looking for work':'Unemployed'});
+  fuBuildChips('fuScore',['0-10','11-20','21-30','31-40','41-50','51-60','61-70','71-80','81-90','91-100'],'scoreSegs');
+  const ages=rawWeb.map(r=>getAge(r['DOB'])).filter(Boolean).map(ageGroup).filter(Boolean);
+  fuBuildChips('fuAge',[...new Set(ages)].sort((a,b)=>{if(a==='<18')return -1;if(b==='<18')return 1;return parseInt(a)-parseInt(b);}),'ageGroups');
+  fuBuildChips('fuGender',[...new Set(rawWeb.map(r=>(r['Gender']||'').trim()).filter(Boolean))],'gender');
+  const sc={};rawWeb.forEach(r=>{const s=(r['State']||'').trim();if(s)sc[s]=(sc[s]||0)+1;});
+  fuBuildChips('fuState',Object.entries(sc).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([s])=>s),'states');
+  fuBuildChips('fuTrivia',Object.keys(TRIVIA_COLS),'trivia');
+  fuBuildChips('fuCerts',CERT_NAMES,'certs');
+  fuMenuBuilt=true;
+}
+function fuFilterChanged(){
+  const n=fuFilterCount();
+  const b=document.getElementById('fuFilterBadge');
+  if(b){b.textContent=n;b.style.display=n?'inline':'none';}
+  renderFollowup();
+}
+function toggleFuFilterMenu(e){
+  if(e)e.stopPropagation();
+  const m=document.getElementById('fuFilterMenu');
+  if(!m)return;
+  const open=m.style.display==='none';
+  if(open&&!fuMenuBuilt)buildFuFilterMenu();
+  m.style.display=open?'block':'none';
+}
+document.addEventListener('click',e=>{
+  const m=document.getElementById('fuFilterMenu');
+  if(m&&m.style.display!=='none'&&!m.contains(e.target)&&e.target.id!=='fuFilterBtn')m.style.display='none';
+});
+function onFuExcRange(){
+  let mn=parseInt(document.getElementById('fuExcMin').value),mx=parseInt(document.getElementById('fuExcMax').value);
+  if(mn>mx){const t=mn;mn=mx;mx=t;}
+  fuf.excMin=mn;fuf.excMax=mx;
+  document.getElementById('fuExcMinVal').textContent=mn;document.getElementById('fuExcMaxVal').textContent=mx;
+  fuFilterChanged();
+}
+function onFuTriviaRange(){
+  let mn=parseInt(document.getElementById('fuTriviaMin').value),mx=parseInt(document.getElementById('fuTriviaMax').value);
+  if(mn>mx){const t=mn;mn=mx;mx=t;}
+  fuf.triviaScoreMin=mn;fuf.triviaScoreMax=mx;
+  document.getElementById('fuTsMinVal').textContent=mn;document.getElementById('fuTsMaxVal').textContent=mx;
+  fuFilterChanged();
+}
+function clearFuFilters(){
+  fuf.excMin=0;fuf.excMax=100;fuf.triviaScoreMin=0;fuf.triviaScoreMax=20;
+  FU_SETS.forEach(k=>fuf[k].clear());
+  [['fuExcMin',0],['fuExcMax',100],['fuTriviaMin',0],['fuTriviaMax',20]].forEach(([id,v])=>{const el=document.getElementById(id);if(el)el.value=v;});
+  [['fuExcMinVal',0],['fuExcMaxVal',100],['fuTsMinVal',0],['fuTsMaxVal',20]].forEach(([id,v])=>{const el=document.getElementById(id);if(el)el.textContent=v;});
+  document.querySelectorAll('#fuFilterMenu .filter-chip').forEach(c=>c.classList.remove('active'));
+  const ts=document.getElementById('fuTriviaScoreSection');if(ts){ts.style.opacity='.4';ts.style.pointerEvents='none';}
+  fuFilterChanged();
 }
 
 function exportPipelineExcel(){
@@ -3630,6 +3771,38 @@ async function bulkAddToUnassigned(){
       <option value="">All Events</option>
     </select>
     <input class="pipe-search" id="followupSearch" placeholder="Search name / phone / email…" oninput="renderFollowup()">
+    <div style="position:relative;">
+      <button id="fuFilterBtn" onclick="toggleFuFilterMenu(event)" title="More filters" style="font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;background:var(--surface);border:1.5px solid var(--border);color:var(--text);padding:5px 12px;border-radius:4px;cursor:pointer;">&#9776; Filters <span id="fuFilterBadge" style="display:none;background:#ce0e2d;color:#fff;border-radius:9px;padding:0 6px;margin-left:4px;font-size:11px;">0</span></button>
+      <div id="fuFilterMenu" onclick="event.stopPropagation()" style="display:none;position:absolute;top:100%;left:0;margin-top:6px;z-index:60;width:340px;max-height:70vh;overflow-y:auto;background:#fff;border:1.5px solid var(--border);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <span style="font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">Candidate Filters</span>
+          <button onclick="clearFuFilters()" style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;background:transparent;border:none;color:#ce0e2d;cursor:pointer;">Clear</button>
+        </div>
+        <div class="filter-section"><div class="fs-title"><span class="fs-dot"></span>EXC Score Range</div>
+          <div class="range-wrap">
+            <div class="slider-track">Min: <span id="fuExcMinVal">0</span></div>
+            <input type="range" id="fuExcMin" min="0" max="100" value="0" oninput="onFuExcRange()">
+            <div class="slider-track">Max: <span id="fuExcMaxVal">100</span></div>
+            <input type="range" id="fuExcMax" min="0" max="100" value="100" oninput="onFuExcRange()">
+          </div></div>
+        <div class="filter-section"><div class="fs-title"><span class="fs-dot"></span>Job Interest</div><div class="filter-chip-wrap" id="fuJI"></div></div>
+        <div class="filter-section"><div class="fs-title"><span class="fs-dot"></span>Employment Status</div><div class="filter-chip-wrap" id="fuEmp"></div></div>
+        <div class="filter-section"><div class="fs-title"><span class="fs-dot"></span>EXC Score Segment</div><div class="filter-chip-wrap" id="fuScore"></div></div>
+        <div class="filter-section"><div class="fs-title"><span class="fs-dot"></span>Age Group</div><div class="filter-chip-wrap" id="fuAge"></div></div>
+        <div class="filter-section"><div class="fs-title"><span class="fs-dot"></span>Gender</div><div class="filter-chip-wrap" id="fuGender"></div></div>
+        <div class="filter-section"><div class="fs-title"><span class="fs-dot"></span>State (top 10)</div><div class="filter-chip-wrap" id="fuState"></div></div>
+        <div class="filter-section"><div class="fs-title"><span class="fs-dot"></span>Trivia Test Taken</div><div class="filter-chip-wrap" id="fuTrivia"></div></div>
+        <div class="filter-section" id="fuTriviaScoreSection" style="opacity:.4;pointer-events:none;"><div class="fs-title"><span class="fs-dot"></span>Trivia Score Range <span style="font-size:9px;margin-left:4px;color:var(--muted)">(select 1 test)</span></div>
+          <div class="range-wrap">
+            <div class="slider-track">Min: <span id="fuTsMinVal">0</span></div>
+            <input type="range" id="fuTriviaMin" min="0" max="20" value="0" oninput="onFuTriviaRange()">
+            <div class="slider-track">Max: <span id="fuTsMaxVal">20</span></div>
+            <input type="range" id="fuTriviaMax" min="0" max="20" value="20" oninput="onFuTriviaRange()">
+          </div></div>
+        <div class="filter-section"><div class="fs-title"><span class="fs-dot"></span>Trade Certifications</div><div class="filter-chip-wrap" id="fuCerts"></div></div>
+        <div style="font-size:10px;color:var(--muted);margin-top:6px;">Internet Leads candidates have no registration data, so they are hidden while any of these filters is active.</div>
+      </div>
+    </div>
     <span class="pipe-count" id="followupCount"></span>
   </div>
   <div class="pipe-table-wrap">
@@ -3642,6 +3815,7 @@ async function bulkAddToUnassigned(){
         <th>Hopeful Job</th>
         <th>Pay Range</th>
         <th>Further Vetted</th>
+        <th>CI</th>
         <th>Notes</th>
         <th></th>
       </tr></thead>
@@ -3711,6 +3885,17 @@ async function bulkAddToUnassigned(){
           </label>
           <span id="fuFileName" style="font-size:11px;color:var(--muted);font-family:'Barlow Condensed',sans-serif;"></span>
           <span id="fuFileExisting" style="font-size:11px;color:var(--blue);font-family:'Barlow Condensed',sans-serif;"></span>
+        </div>
+      </div>
+      <div class="assign-field">
+        <label class="assign-label">Culture Index <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);font-family:'Barlow',sans-serif;font-size:11px">(PDF &middot; staff only, never shown to customers)</span></label>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <label style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:6px 14px;border:1.5px dashed var(--border);border-radius:4px;cursor:pointer;color:var(--muted);">
+            &#8679; Choose PDF
+            <input type="file" id="fuCiFile" style="display:none" accept=".pdf,application/pdf" onchange="onFuCiFileChange(this)">
+          </label>
+          <span id="fuCiFileName" style="font-size:11px;color:var(--muted);font-family:'Barlow Condensed',sans-serif;"></span>
+          <span id="fuCiExisting" style="font-size:11px;color:var(--blue);font-family:'Barlow Condensed',sans-serif;"></span>
         </div>
       </div>
       <div id="fuMsg" style="font-size:12px;"></div>
