@@ -2183,7 +2183,7 @@ function updatePipeBadge(){
 }
 
 function eventCandidateName(ev){
-  const w = rawWeb.find(r=>normalizePhone(r['Mobile Phone']||'')===ev.phone);
+  const w = webByPhone(ev.phone);
   const nm = w ? ((w['First Name']||'')+' '+(w['Last Name']||'')).trim() : '';
   return nm || ('Phone: '+ev.phone);
 }
@@ -2222,6 +2222,25 @@ function rejInfoByPhone(){
 }
 
 // ── Load CRM data alongside main data ────────────────────────────────────────
+// Registrations can repeat per phone (multiple events); prefer the row that
+// actually has a name so Follow-Up/Pipeline don't fall back to "Phone: …".
+let _webByPhoneSrc=null,_webByPhone=null;
+function webByPhone(phone){
+  if(_webByPhoneSrc!==rawWeb){
+    _webByPhone=new Map();
+    rawWeb.forEach(r=>{
+      const k=normalizePhone(r['Mobile Phone']||'');
+      if(!k) return;
+      const cur=_webByPhone.get(k);
+      const named=!!((r['First Name']||'').trim()||(r['Last Name']||'').trim());
+      if(!cur || (named && !cur.named)) _webByPhone.set(k,{row:r,named});
+    });
+    _webByPhoneSrc=rawWeb;
+  }
+  const hit=_webByPhone.get(phone);
+  return hit?hit.row:undefined;
+}
+
 async function loadCRMData(){
   try{
     // candidate_assignments now runs into the thousands (every Yes/Maybe
@@ -2562,7 +2581,7 @@ function renderPipeline(){
 
   let rows = assignments.filter(a=>a.company_id).map(a=>{
     const company = companies.find(c=>c.id===a.company_id);
-    const w = rawWeb.find(r=>normalizePhone(r['Mobile Phone']||'')===a.phone);
+    const w = webByPhone(a.phone);
     const l = !w ? rawLeads.find(r=>normalizePhone(r['Phone']||'')===a.phone) : null;
     const name = w ? ((w['First Name']||'')+' '+(w['Last Name']||'')).trim() : (l ? (l['Name']||'').trim() : '');
     // a.phone is the normalized matching key (last 9 digits, used to join
@@ -2687,7 +2706,7 @@ async function updatePipelineStatus(id, sel){
   if(s===prev) return;
   let reason = null;
   if(s==='Rejected'){
-    const w = r ? rawWeb.find(row=>normalizePhone(row['Mobile Phone']||'')===r.phone) : null;
+    const w = r ? webByPhone(r.phone) : null;
     const name = w ? ((w['First Name']||'')+' '+(w['Last Name']||'')).trim() : '';
     reason = prompt('Reason for rejecting '+(name||'this candidate')+':');
     if(reason===null || !reason.trim()){ sel.value=prev; return; }
@@ -2724,7 +2743,7 @@ function renderRequests(){
   updateRequestsBadge();
   let rows = assignments.filter(a=>a.company_id && a.request_status==='requested').map(a=>{
     const company = companies.find(c=>c.id===a.company_id);
-    const w = rawWeb.find(r=>normalizePhone(r['Mobile Phone']||'')===a.phone);
+    const w = webByPhone(a.phone);
     const name = w ? ((w['First Name']||'')+' '+(w['Last Name']||'')).trim() : '';
     return {...a, companyName: company?company.name:'Unknown company', name: name || ('Phone: '+a.phone)};
   });
@@ -2873,10 +2892,11 @@ function renderFollowup(){
   const eventFilter = document.getElementById('followupEventFilter')?.value || '';
   const today = new Date().toISOString().slice(0,10);
   let rows = assignments.filter(a=>!a.company_id).map(a=>{
-    const w = rawWeb.find(r=>normalizePhone(r['Mobile Phone']||'')===a.phone);
-    const l = !w ? rawLeads.find(r=>normalizePhone(r['Phone']||'')===a.phone) : null;
-    const name = w ? ((w['First Name']||'')+' '+(w['Last Name']||'')).trim() : (l ? (l['Name']||'').trim() : '');
-    const email = w ? (w['Email Address']||'') : (l ? (l['Email']||'') : '');
+    const w = webByPhone(a.phone);
+    const wName = w ? ((w['First Name']||'')+' '+(w['Last Name']||'')).trim() : '';
+    const l = !wName ? rawLeads.find(r=>normalizePhone(r['Phone']||'')===a.phone) : null;
+    const name = wName || (l ? (l['Name']||'').trim() : '');
+    const email = (w && w['Email Address']) || (l ? (l['Email']||'') : '');
     // a.phone is the normalized matching key (last 9 digits) — show the
     // actual phone from whichever source record matched instead.
     const displayPhone = w ? (w['Mobile Phone']||a.phone) : (l ? (l['Phone']||a.phone) : a.phone);
@@ -2971,7 +2991,7 @@ function openReminderModal(id){
   const a = assignments.find(x=>x.id===id);
   if(!a) return;
   reminderEditId = id;
-  const w = rawWeb.find(r=>normalizePhone(r['Mobile Phone']||'')===a.phone);
+  const w = webByPhone(a.phone);
   const name = w ? ((w['First Name']||'')+' '+(w['Last Name']||'')).trim() : ('Phone: '+a.phone);
   document.getElementById('reminderCandidateName').textContent = name;
   document.getElementById('reminderDate').value = a.reminder_date || '';
@@ -3003,7 +3023,7 @@ function openFollowupEdit(id){
   const a = assignments.find(x=>x.id===id);
   if(!a) return;
   followupEditId = id; followupEditFile=null; followupEditCiFile=null;
-  const w = rawWeb.find(r=>normalizePhone(r['Mobile Phone']||'')===a.phone);
+  const w = webByPhone(a.phone);
   const l = !w ? rawLeads.find(r=>normalizePhone(r['Phone']||'')===a.phone) : null;
   const name = w ? ((w['First Name']||'')+' '+(w['Last Name']||'')).trim() : (l ? (l['Name']||'').trim() : ('Phone: '+a.phone));
   document.getElementById('followupEditName').textContent = name;
